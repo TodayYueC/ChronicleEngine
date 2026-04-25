@@ -3,6 +3,10 @@
 #include "Asset/ChronicleDialogueJsonLibrary.h"
 #include "Data/DialogueTree.h"
 #include "Editor/ChronicleDialogueEditorLibrary.h"
+#include "Editor/ChronicleDialogueGraph.h"
+#include "Editor/ChronicleDialogueGraphNode.h"
+#include "EdGraph/EdGraph.h"
+#include "GraphEditor.h"
 #include "InputCoreTypes.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/AppStyle.h"
@@ -258,6 +262,7 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
     PendingEdgeSourceGuid.Invalidate();
     EdgeSlotIndex = 0;
     EdgeCondition.Reset();
+    RebuildGraph();
 
     ChildSlot
     [
@@ -303,6 +308,33 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
                 SNew(SButton)
                 .Text(LOCTEXT("Validate", "Validate"))
                 .OnClicked(this, &SDialogueTreeEditor::HandleValidateClicked)
+            ]
+
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .Text(LOCTEXT("SaveLayout", "Save Layout"))
+                .OnClicked(this, &SDialogueTreeEditor::HandleSaveGraphLayoutClicked)
+            ]
+
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .Text(LOCTEXT("UseSelectedAsSource", "Use As Source"))
+                .OnClicked(this, &SDialogueTreeEditor::HandleUseSelectedAsLinkSourceClicked)
+            ]
+
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .Text(LOCTEXT("CreateEdgeToSelected", "Link To Selected"))
+                .OnClicked(this, &SDialogueTreeEditor::HandleCreateEdgeToSelectedClicked)
             ]
 
             + SHorizontalBox::Slot()
@@ -483,6 +515,7 @@ FReply SDialogueTreeEditor::HandleAddNodeClicked(EDialogueNodeType NodeType)
         SelectedNodeGuid = NewNodeGuid;
     }
 
+    RebuildGraph();
     RefreshCanvas();
     RefreshInspector();
     RefreshValidationSummary();
@@ -492,6 +525,49 @@ FReply SDialogueTreeEditor::HandleAddNodeClicked(EDialogueNodeType NodeType)
 FReply SDialogueTreeEditor::HandleValidateClicked()
 {
     RefreshValidationSummary();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleSaveGraphLayoutClicked()
+{
+    if (DialogueGraph.IsValid())
+    {
+        DialogueGraph->SynchronizeNodePositionsToDialogueTree();
+    }
+
+    RefreshInspector();
+    RefreshValidationSummary();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleUseSelectedAsLinkSourceClicked()
+{
+    if (SelectedNodeGuid.IsValid())
+    {
+        PendingEdgeSourceGuid = SelectedNodeGuid;
+    }
+
+    RefreshInspector();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleCreateEdgeToSelectedClicked()
+{
+    if (!DialogueTree.IsValid() || !PendingEdgeSourceGuid.IsValid() || !SelectedNodeGuid.IsValid() || PendingEdgeSourceGuid == SelectedNodeGuid)
+    {
+        return FReply::Handled();
+    }
+
+    FDialogueEdge NewEdge;
+    FString Error;
+    if (UChronicleDialogueEditorLibrary::AddDialogueEdge(DialogueTree.Get(), PendingEdgeSourceGuid, SelectedNodeGuid, EdgeSlotIndex, EdgeCondition, NewEdge, Error))
+    {
+        RebuildGraph();
+        RefreshCanvas();
+        RefreshInspector();
+        RefreshValidationSummary();
+    }
+
     return FReply::Handled();
 }
 
@@ -524,6 +600,7 @@ FReply SDialogueTreeEditor::HandleLinkHereClicked(FGuid TargetNodeGuid)
     if (UChronicleDialogueEditorLibrary::AddDialogueEdge(DialogueTree.Get(), PendingEdgeSourceGuid, TargetNodeGuid, EdgeSlotIndex, EdgeCondition, NewEdge, Error))
     {
         SelectedNodeGuid = PendingEdgeSourceGuid;
+        RebuildGraph();
     }
 
     RefreshCanvas();
@@ -542,6 +619,10 @@ FReply SDialogueTreeEditor::HandleDeleteEdgeClicked(FGuid FromNodeGuid, FGuid To
     int32 RemovedCount = 0;
     FString Error;
     UChronicleDialogueEditorLibrary::RemoveDialogueEdge(DialogueTree.Get(), FromNodeGuid, ToNodeGuid, FromSlotIndex, ConditionExpression, RemovedCount, Error);
+    if (RemovedCount > 0)
+    {
+        RebuildGraph();
+    }
 
     RefreshCanvas();
     RefreshInspector();
@@ -577,7 +658,60 @@ void SDialogueTreeEditor::HandleEdgeConditionChanged(const FText& InText)
 void SDialogueTreeEditor::HandleSearchTextChanged(const FText& InText)
 {
     SearchQuery = InText.ToString();
-    RefreshCanvas();
+    if (GraphEditor.IsValid() && DialogueGraph.IsValid() && DialogueTree.IsValid())
+    {
+        GraphEditor->ClearSelectionSet();
+
+        if (SearchQuery.TrimStartAndEnd().IsEmpty())
+        {
+            SelectedNodeGuid.Invalidate();
+            RefreshInspector();
+            return;
+        }
+
+        TArray<FGuid> SearchResults;
+        UChronicleDialogueEditorLibrary::SearchDialogueNodes(DialogueTree.Get(), SearchQuery, SearchResults);
+        for (const FGuid& NodeGuid : SearchResults)
+        {
+            if (UChronicleDialogueGraphNode* GraphNode = DialogueGraph->FindDialogueGraphNode(NodeGuid))
+            {
+                GraphEditor->SetNodeSelection(GraphNode, true);
+            }
+        }
+
+        if (SearchResults.Num() > 0)
+        {
+            SelectedNodeGuid = SearchResults[0];
+            GraphEditor->ZoomToFit(true);
+        }
+    }
+
+    RefreshInspector();
+}
+
+void SDialogueTreeEditor::HandleGraphChanged(const FEdGraphEditAction& Action)
+{
+    if (DialogueGraph.IsValid())
+    {
+        DialogueGraph->SynchronizeNodePositionsToDialogueTree();
+    }
+
+    RefreshInspector();
+    RefreshValidationSummary();
+}
+
+void SDialogueTreeEditor::HandleGraphSelectionChanged(const TSet<UObject*>& Selection)
+{
+    SelectedNodeGuid.Invalidate();
+    for (UObject* SelectedObject : Selection)
+    {
+        if (const UChronicleDialogueGraphNode* GraphNode = Cast<UChronicleDialogueGraphNode>(SelectedObject))
+        {
+            SelectedNodeGuid = GraphNode->DialogueNodeGuid;
+            break;
+        }
+    }
+
     RefreshInspector();
 }
 
@@ -597,6 +731,26 @@ FText SDialogueTreeEditor::GetLinkStateText() const
         LOCTEXT("PendingLink", "Source: {0}\nSlot: {1}"),
         FText::FromString(GetShortGuid(PendingEdgeSourceGuid)),
         FText::AsNumber(EdgeSlotIndex));
+}
+
+void SDialogueTreeEditor::RebuildGraph()
+{
+    if (DialogueGraph.IsValid() && GraphChangedHandle.IsValid())
+    {
+        DialogueGraph->RemoveOnGraphChangedHandler(GraphChangedHandle);
+        GraphChangedHandle.Reset();
+    }
+
+    DialogueGraph.Reset();
+    if (!DialogueTree.IsValid())
+    {
+        return;
+    }
+
+    UChronicleDialogueGraph* NewGraph = NewObject<UChronicleDialogueGraph>(GetTransientPackage());
+    NewGraph->Initialize(DialogueTree.Get());
+    GraphChangedHandle = NewGraph->AddOnGraphChangedHandler(FOnGraphChanged::FDelegate::CreateSP(this, &SDialogueTreeEditor::HandleGraphChanged));
+    DialogueGraph = TStrongObjectPtr<UChronicleDialogueGraph>(NewGraph);
 }
 
 void SDialogueTreeEditor::RefreshCanvas()
@@ -658,70 +812,28 @@ void SDialogueTreeEditor::RefreshValidationSummary()
 
 TSharedRef<SWidget> SDialogueTreeEditor::BuildCanvas()
 {
-    TSharedRef<SConstraintCanvas> Canvas = SNew(SConstraintCanvas);
     VisibleNodeGuids.Reset();
 
-    if (!DialogueTree.IsValid())
+    if (!DialogueGraph.IsValid() || !DialogueTree.IsValid())
     {
-        return SNew(SBox)
-            .WidthOverride(CanvasWidth)
-            .HeightOverride(CanvasHeight)
-            [
-                Canvas
-            ];
+        return SNew(STextBlock)
+            .Text(LOCTEXT("GraphUnavailable", "Dialogue graph unavailable."));
     }
 
     UChronicleDialogueEditorLibrary::SearchDialogueNodes(DialogueTree.Get(), SearchQuery, VisibleNodeGuids);
-    TSet<FGuid> VisibleSet(VisibleNodeGuids);
-    const TArray<FDialogueEdge> VisibleEdges = GetVisibleEdges(VisibleSet);
-    TArray<FDialogueEdgeVisual> EdgeVisuals;
 
-    for (const FDialogueEdge& Edge : VisibleEdges)
-    {
-        const FDialogueNode* FromNode = DialogueTree->FindNode(Edge.FromNodeGuid);
-        const FDialogueNode* ToNode = DialogueTree->FindNode(Edge.ToNodeGuid);
-        if (!FromNode || !ToNode)
-        {
-            continue;
-        }
+    FGraphAppearanceInfo AppearanceInfo;
+    AppearanceInfo.CornerText = LOCTEXT("GraphCorner", "Chronicle Dialogue Tree");
+    AppearanceInfo.InstructionText = LOCTEXT("GraphInstructions", "Drag from output pins to input pins to create dialogue edges.");
 
-        FDialogueEdgeVisual Visual;
-        Visual.Start = GetNodeCanvasPosition(*FromNode) + FVector2D(NodeWidth, NodeHeight * 0.5f);
-        Visual.End = GetNodeCanvasPosition(*ToNode) + FVector2D(0.0f, NodeHeight * 0.5f);
-        Visual.Color = Edge.FromNodeGuid == SelectedNodeGuid || Edge.ToNodeGuid == SelectedNodeGuid
-            ? FLinearColor(0.95f, 0.76f, 0.16f, 1.0f)
-            : FLinearColor(0.50f, 0.64f, 0.86f, 0.95f);
-        EdgeVisuals.Add(Visual);
-    }
+    SGraphEditor::FGraphEditorEvents GraphEvents;
+    GraphEvents.OnSelectionChanged = SGraphEditor::FOnSelectionChanged::CreateSP(this, &SDialogueTreeEditor::HandleGraphSelectionChanged);
 
-    Canvas->AddSlot()
-    .Offset(FMargin(0.0f, 0.0f, CanvasWidth, CanvasHeight))
-    [
-        SNew(SDialogueEdgeLayer)
-        .Edges(EdgeVisuals)
-    ];
-
-    for (const FDialogueNode& Node : DialogueTree->Nodes)
-    {
-        if (!VisibleSet.Contains(Node.NodeGuid))
-        {
-            continue;
-        }
-
-        const FVector2D Position = GetNodeCanvasPosition(Node);
-        Canvas->AddSlot()
-        .Offset(FMargin(Position.X, Position.Y, NodeWidth, NodeHeight))
-        [
-            BuildNodeCard(Node)
-        ];
-    }
-
-    return SNew(SBox)
-        .WidthOverride(CanvasWidth)
-        .HeightOverride(CanvasHeight)
-        [
-            Canvas
-        ];
+    return SAssignNew(GraphEditor, SGraphEditor)
+        .GraphToEdit(DialogueGraph.Get())
+        .GraphEvents(GraphEvents)
+        .Appearance(AppearanceInfo)
+        .IsEditable(true);
 }
 
 TSharedRef<SWidget> SDialogueTreeEditor::BuildNodeCard(const FDialogueNode& Node)

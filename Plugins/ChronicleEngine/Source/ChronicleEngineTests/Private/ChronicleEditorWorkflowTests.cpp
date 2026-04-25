@@ -2,6 +2,9 @@
 
 #include "Data/DialogueTree.h"
 #include "Editor/ChronicleDialogueEditorLibrary.h"
+#include "Editor/ChronicleDialogueGraph.h"
+#include "Editor/ChronicleDialogueGraphNode.h"
+#include "Editor/ChronicleDialogueGraphSchema.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleEditorAddNodeTest, "Chronicle.Editor.TreeEditor.AddNodeAndSearch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FChronicleEditorAddNodeTest::RunTest(const FString& Parameters)
@@ -87,6 +90,73 @@ bool FChronicleEditorEdgeEditingTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("One matching edge removed"), RemovedCount, 1);
     TestEqual(TEXT("One edge remains"), Tree->Edges.Num(), 1);
     TestEqual(TEXT("Conditional edge remains"), Tree->Edges[0].ToNodeGuid, ChoiceGuid);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleEditorGraphSchemaTest, "Chronicle.Editor.Graph.SchemaSync", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleEditorGraphSchemaTest::RunTest(const FString& Parameters)
+{
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+
+    FString Error;
+    FGuid RootGuid;
+    FGuid SpeechGuid;
+    TestTrue(TEXT("Root node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Root, FVector2D::ZeroVector, RootGuid, Error));
+    TestTrue(TEXT("Speech node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Speech, FVector2D(200.0f, 100.0f), SpeechGuid, Error));
+
+    UChronicleDialogueGraph* Graph = NewObject<UChronicleDialogueGraph>();
+    Graph->Initialize(Tree);
+
+    TestEqual(TEXT("Graph mirrors dialogue nodes"), Graph->Nodes.Num(), 2);
+    UChronicleDialogueGraphNode* RootGraphNode = Graph->FindDialogueGraphNode(RootGuid);
+    UChronicleDialogueGraphNode* SpeechGraphNode = Graph->FindDialogueGraphNode(SpeechGuid);
+    TestNotNull(TEXT("Root graph node exists"), RootGraphNode);
+    TestNotNull(TEXT("Speech graph node exists"), SpeechGraphNode);
+    if (!RootGraphNode || !SpeechGraphNode)
+    {
+        return false;
+    }
+
+    UEdGraphPin* RootOutputPin = RootGraphNode->GetOutputPinBySlot(0);
+    UEdGraphPin* SpeechInputPin = SpeechGraphNode->GetInputPin();
+    TestNotNull(TEXT("Root output pin exists"), RootOutputPin);
+    TestNotNull(TEXT("Speech input pin exists"), SpeechInputPin);
+    if (!RootOutputPin || !SpeechInputPin)
+    {
+        return false;
+    }
+
+    const UChronicleDialogueGraphSchema* Schema = Cast<UChronicleDialogueGraphSchema>(Graph->GetSchema());
+    TestNotNull(TEXT("Chronicle graph schema exists"), Schema);
+    if (!Schema)
+    {
+        return false;
+    }
+
+    const FPinConnectionResponse Response = Schema->CanCreateConnection(RootOutputPin, SpeechInputPin);
+    TestEqual(TEXT("Schema allows output-to-input dialogue connection"), Response.Response.GetValue(), CONNECT_RESPONSE_MAKE);
+
+    TestTrue(TEXT("Schema creates a dialogue edge"), Schema->TryCreateConnection(RootOutputPin, SpeechInputPin));
+    TestEqual(TEXT("Dialogue tree gained one edge"), Tree->Edges.Num(), 1);
+    TestEqual(TEXT("Created edge source"), Tree->Edges[0].FromNodeGuid, RootGuid);
+    TestEqual(TEXT("Created edge target"), Tree->Edges[0].ToNodeGuid, SpeechGuid);
+    TestTrue(TEXT("Graph pins are linked"), RootOutputPin->LinkedTo.Contains(SpeechInputPin));
+
+    SpeechGraphNode->NodePosX = 640;
+    SpeechGraphNode->NodePosY = 320;
+    Graph->SynchronizeNodePositionsToDialogueTree();
+    const FDialogueNode* SpeechNode = Tree->FindNode(SpeechGuid);
+    TestNotNull(TEXT("Speech dialogue node exists after position sync"), SpeechNode);
+    if (SpeechNode)
+    {
+        TestEqual(TEXT("Graph node position synced to dialogue tree"), SpeechNode->Position, FVector2D(640.0f, 320.0f));
+    }
+
+    Schema->BreakSinglePinLink(RootOutputPin, SpeechInputPin);
+    TestEqual(TEXT("Dialogue edge removed when pin link breaks"), Tree->Edges.Num(), 0);
+    TestFalse(TEXT("Graph pins are unlinked"), RootOutputPin->LinkedTo.Contains(SpeechInputPin));
 
     return true;
 }

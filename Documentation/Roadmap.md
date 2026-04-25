@@ -22,9 +22,9 @@ Status: current implementation pass.
 Status: current implementation pass.
 
 - Dialogue Tree assets open in a Chronicle custom asset editor instead of the default details-only view.
-- Added a Slate node canvas with colored node cards, search filtering, validation summary, basic Speech/Choice/Condition node creation, drag-position persistence, visible edge lines, and edge create/delete controls.
+- Added a native `SGraphEditor` view backed by Chronicle EdGraph/Node/Schema classes, with search selection, validation summary, basic Speech/Choice/Condition node creation, graph-position persistence, pin connection edge creation, pin break edge deletion, and conditional edge create/delete controls.
 - Added editor helper APIs for node creation, node movement, edge editing, node search, and node display names.
-- Remaining: true `SGraphEditor` pin/schema implementation, details customization, breakpoints, PIE debugger, and soft-lock metadata.
+- Remaining: Details panel customization, graph context menu actions, breakpoints, PIE debugger, and soft-lock metadata.
 
 ## M4 Presentation
 

@@ -19,6 +19,7 @@ public class ChronicleEngineEditor : ModuleRules
         {
             "AssetTools",
             "EditorFramework",
+            "GraphEditor",
             "InputCore",
             "Json",
             "JsonUtilities",

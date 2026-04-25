@@ -2,11 +2,15 @@
 
 #include "CoreMinimal.h"
 #include "Core/ChronicleTypes.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Widgets/SCompoundWidget.h"
 
+class SGraphEditor;
 class UDialogueTree;
+class UChronicleDialogueGraph;
 class SBox;
 class STextBlock;
+struct FEdGraphEditAction;
 
 struct FDialogueEdge;
 
@@ -22,6 +26,9 @@ public:
 private:
     FReply HandleAddNodeClicked(EDialogueNodeType NodeType);
     FReply HandleValidateClicked();
+    FReply HandleSaveGraphLayoutClicked();
+    FReply HandleUseSelectedAsLinkSourceClicked();
+    FReply HandleCreateEdgeToSelectedClicked();
     FReply HandleNodeSelected(FGuid NodeGuid);
     FReply HandleStartLinkClicked(FGuid NodeGuid);
     FReply HandleLinkHereClicked(FGuid TargetNodeGuid);
@@ -30,8 +37,11 @@ private:
     void HandleEdgeSlotChanged(int32 NewValue);
     void HandleEdgeConditionChanged(const FText& InText);
     void HandleSearchTextChanged(const FText& InText);
+    void HandleGraphChanged(const FEdGraphEditAction& Action);
+    void HandleGraphSelectionChanged(const TSet<UObject*>& Selection);
     int32 GetEdgeSlotIndex() const;
     FText GetLinkStateText() const;
+    void RebuildGraph();
     void RefreshCanvas();
     void RefreshInspector();
     void RefreshValidationSummary();
@@ -44,6 +54,9 @@ private:
     FString GetShortGuid(const FGuid& Guid) const;
 
     TWeakObjectPtr<UDialogueTree> DialogueTree;
+    TStrongObjectPtr<UChronicleDialogueGraph> DialogueGraph;
+    TSharedPtr<SGraphEditor> GraphEditor;
+    FDelegateHandle GraphChangedHandle;
     TSharedPtr<SBox> CanvasHost;
     TSharedPtr<SBox> EdgeListHost;
     TSharedPtr<STextBlock> ValidationText;
