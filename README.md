@@ -22,7 +22,7 @@ M2 focuses on asset-pipeline workflow around the runnable runtime vertical slice
 - CSV export/import for dialogue-line text handoff
 - structural validation for broken edges and unreachable nodes
 - custom Dialogue Tree asset editor foundation
-- Slate node canvas with search, validation summary, and basic node creation
+- Slate node canvas with search, validation summary, basic node creation, drag-position persistence, and edge create/delete controls
 - automation tests
 
 ## Build Baseline

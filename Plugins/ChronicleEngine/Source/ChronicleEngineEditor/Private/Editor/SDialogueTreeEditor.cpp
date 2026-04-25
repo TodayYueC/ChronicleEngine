@@ -3,22 +3,261 @@
 #include "Asset/ChronicleDialogueJsonLibrary.h"
 #include "Data/DialogueTree.h"
 #include "Editor/ChronicleDialogueEditorLibrary.h"
+#include "InputCoreTypes.h"
+#include "Rendering/DrawElements.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SSearchBox.h"
+#include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SConstraintCanvas.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSplitter.h"
+#include "Widgets/SLeafWidget.h"
 #include "Widgets/Text/STextBlock.h"
 
 #define LOCTEXT_NAMESPACE "SDialogueTreeEditor"
+
+namespace
+{
+constexpr float CanvasWidth = 2400.0f;
+constexpr float CanvasHeight = 1500.0f;
+constexpr float NodeWidth = 276.0f;
+constexpr float NodeHeight = 174.0f;
+const FVector2D CanvasOrigin(800.0f, 360.0f);
+
+struct FDialogueEdgeVisual
+{
+    FVector2D Start;
+    FVector2D End;
+    FLinearColor Color = FLinearColor::White;
+};
+
+DECLARE_DELEGATE_RetVal_OneParam(FReply, FOnDialogueNodeCommand, FGuid);
+DECLARE_DELEGATE_TwoParams(FOnDialogueNodeMoveCommitted, FGuid, FVector2D);
+
+FString GetShortGuidText(const FGuid& Guid)
+{
+    return Guid.ToString(EGuidFormats::Digits).Left(8);
+}
+
+FVector2D GetNodeCanvasPosition(const FDialogueNode& Node)
+{
+    return Node.Position + CanvasOrigin;
+}
+
+class SDialogueEdgeLayer : public SLeafWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SDialogueEdgeLayer) {}
+        SLATE_ARGUMENT(TArray<FDialogueEdgeVisual>, Edges)
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs)
+    {
+        Edges = InArgs._Edges;
+    }
+
+    virtual FVector2D ComputeDesiredSize(float LayoutScaleMultiplier) const override
+    {
+        return FVector2D(CanvasWidth, CanvasHeight);
+    }
+
+    virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override
+    {
+        for (const FDialogueEdgeVisual& Edge : Edges)
+        {
+            TArray<FVector2D> Points;
+            Points.Add(Edge.Start);
+            Points.Add(Edge.End);
+            FSlateDrawElement::MakeLines(
+                OutDrawElements,
+                LayerId,
+                AllottedGeometry.ToPaintGeometry(),
+                Points,
+                ESlateDrawEffect::None,
+                Edge.Color,
+                true,
+                2.5f);
+        }
+
+        return LayerId + 1;
+    }
+
+private:
+    TArray<FDialogueEdgeVisual> Edges;
+};
+
+class SDialogueNodeCard : public SCompoundWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SDialogueNodeCard) {}
+        SLATE_ARGUMENT(FDialogueNode, Node)
+        SLATE_ARGUMENT(bool, bSelected)
+        SLATE_ARGUMENT(bool, bCanLinkHere)
+        SLATE_ARGUMENT(FLinearColor, NodeColor)
+        SLATE_ARGUMENT(FString, NodeSummary)
+        SLATE_EVENT(FOnDialogueNodeCommand, OnSelected)
+        SLATE_EVENT(FOnDialogueNodeCommand, OnStartLink)
+        SLATE_EVENT(FOnDialogueNodeCommand, OnLinkHere)
+        SLATE_EVENT(FOnDialogueNodeMoveCommitted, OnMoveCommitted)
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& InArgs)
+    {
+        Node = InArgs._Node;
+        bSelected = InArgs._bSelected;
+        bCanLinkHere = InArgs._bCanLinkHere;
+        NodeColor = InArgs._NodeColor;
+        NodeSummary = InArgs._NodeSummary;
+        OnSelected = InArgs._OnSelected;
+        OnStartLink = InArgs._OnStartLink;
+        OnLinkHere = InArgs._OnLinkHere;
+        OnMoveCommitted = InArgs._OnMoveCommitted;
+
+        ChildSlot
+        [
+            SNew(SBorder)
+            .Padding(10.0f)
+            .BorderBackgroundColor(bSelected ? FLinearColor(0.95f, 0.75f, 0.18f, 1.0f) : NodeColor)
+            [
+                SNew(SVerticalBox)
+
+                + SVerticalBox::Slot()
+                .AutoHeight()
+                [
+                    SNew(STextBlock)
+                    .Text(UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(Node.NodeType))
+                    .Font(FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
+                    .ColorAndOpacity(FLinearColor::White)
+                ]
+
+                + SVerticalBox::Slot()
+                .AutoHeight()
+                .Padding(0.0f, 4.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString(NodeSummary))
+                    .AutoWrapText(true)
+                    .ColorAndOpacity(FLinearColor::White)
+                ]
+
+                + SVerticalBox::Slot()
+                .AutoHeight()
+                .Padding(0.0f, 4.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString(GetShortGuidText(Node.NodeGuid)))
+                    .ColorAndOpacity(FLinearColor(0.9f, 0.9f, 0.9f, 0.8f))
+                ]
+
+                + SVerticalBox::Slot()
+                .AutoHeight()
+                .Padding(0.0f, 6.0f, 0.0f, 0.0f)
+                [
+                    SNew(SHorizontalBox)
+
+                    + SHorizontalBox::Slot()
+                    .AutoWidth()
+                    .Padding(0.0f, 0.0f, 4.0f, 0.0f)
+                    [
+                        SNew(SButton)
+                        .Text(LOCTEXT("SelectNode", "Select"))
+                        .OnClicked(this, &SDialogueNodeCard::HandleSelectClicked)
+                    ]
+
+                    + SHorizontalBox::Slot()
+                    .AutoWidth()
+                    .Padding(0.0f, 0.0f, 4.0f, 0.0f)
+                    [
+                        SNew(SButton)
+                        .Text(LOCTEXT("StartLink", "Link From"))
+                        .OnClicked(this, &SDialogueNodeCard::HandleStartLinkClicked)
+                    ]
+
+                    + SHorizontalBox::Slot()
+                    .AutoWidth()
+                    [
+                        SNew(SButton)
+                        .Text(LOCTEXT("LinkHere", "Link Here"))
+                        .Visibility(bCanLinkHere ? EVisibility::Visible : EVisibility::Collapsed)
+                        .OnClicked(this, &SDialogueNodeCard::HandleLinkHereClicked)
+                    ]
+                ]
+            ]
+        ];
+    }
+
+    virtual FReply OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
+    {
+        if (MouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+        {
+            return FReply::Unhandled();
+        }
+
+        bDragging = true;
+        DragStartScreenPosition = MouseEvent.GetScreenSpacePosition();
+        DragStartNodePosition = Node.Position;
+        return FReply::Handled().CaptureMouse(SharedThis(this));
+    }
+
+    virtual FReply OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override
+    {
+        if (!bDragging || MouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+        {
+            return FReply::Unhandled();
+        }
+
+        bDragging = false;
+        const float GeometryScale = MyGeometry.GetAccumulatedLayoutTransform().GetScale();
+        const FVector2D DragDelta = GeometryScale > KINDA_SMALL_NUMBER
+            ? (MouseEvent.GetScreenSpacePosition() - DragStartScreenPosition) / GeometryScale
+            : MouseEvent.GetScreenSpacePosition() - DragStartScreenPosition;
+        OnMoveCommitted.ExecuteIfBound(Node.NodeGuid, DragStartNodePosition + DragDelta);
+        return FReply::Handled().ReleaseMouseCapture();
+    }
+
+private:
+    FReply HandleSelectClicked() const
+    {
+        return OnSelected.IsBound() ? OnSelected.Execute(Node.NodeGuid) : FReply::Handled();
+    }
+
+    FReply HandleStartLinkClicked() const
+    {
+        return OnStartLink.IsBound() ? OnStartLink.Execute(Node.NodeGuid) : FReply::Handled();
+    }
+
+    FReply HandleLinkHereClicked() const
+    {
+        return OnLinkHere.IsBound() ? OnLinkHere.Execute(Node.NodeGuid) : FReply::Handled();
+    }
+
+    FDialogueNode Node;
+    bool bSelected = false;
+    bool bCanLinkHere = false;
+    bool bDragging = false;
+    FVector2D DragStartScreenPosition = FVector2D::ZeroVector;
+    FVector2D DragStartNodePosition = FVector2D::ZeroVector;
+    FLinearColor NodeColor = FLinearColor::White;
+    FString NodeSummary;
+    FOnDialogueNodeCommand OnSelected;
+    FOnDialogueNodeCommand OnStartLink;
+    FOnDialogueNodeCommand OnLinkHere;
+    FOnDialogueNodeMoveCommitted OnMoveCommitted;
+};
+}
 
 void SDialogueTreeEditor::Construct(const FArguments& InArgs)
 {
     DialogueTree = InArgs._DialogueTree;
     SearchQuery.Reset();
+    SelectedNodeGuid.Invalidate();
+    PendingEdgeSourceGuid.Invalidate();
+    EdgeSlotIndex = 0;
+    EdgeCondition.Reset();
 
     ChildSlot
     [
@@ -143,6 +382,76 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
 
                     + SVerticalBox::Slot()
                     .AutoHeight()
+                    .Padding(0.0f, 8.0f, 0.0f, 2.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT("LinkAuthoringTitle", "Link Authoring"))
+                        .Font(FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 2.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(this, &SDialogueTreeEditor::GetLinkStateText)
+                        .AutoWrapText(true)
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 4.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT("EdgeSlotLabel", "Output Slot"))
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 2.0f)
+                    [
+                        SNew(SSpinBox<int32>)
+                        .MinValue(0)
+                        .MaxValue(128)
+                        .Value(this, &SDialogueTreeEditor::GetEdgeSlotIndex)
+                        .OnValueChanged(this, &SDialogueTreeEditor::HandleEdgeSlotChanged)
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 4.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT("EdgeConditionLabel", "Edge Condition"))
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 2.0f)
+                    [
+                        SNew(SEditableTextBox)
+                        .HintText(LOCTEXT("EdgeConditionHint", "Optional condition expression"))
+                        .OnTextChanged(this, &SDialogueTreeEditor::HandleEdgeConditionChanged)
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 8.0f, 0.0f, 2.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT("OutgoingEdgesTitle", "Selected Node Edges"))
+                        .Font(FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 2.0f)
+                    [
+                        SAssignNew(EdgeListHost, SBox)
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
                     .Padding(0.0f, 8.0f)
                     [
                         SAssignNew(ValidationText, STextBlock)
@@ -154,6 +463,7 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
     ];
 
     RefreshCanvas();
+    RefreshInspector();
     RefreshValidationSummary();
 }
 
@@ -168,8 +478,13 @@ FReply SDialogueTreeEditor::HandleAddNodeClicked(EDialogueNodeType NodeType)
     FString Error;
     const FVector2D Position(120.0f + DialogueTree->Nodes.Num() * 40.0f, 120.0f + DialogueTree->Nodes.Num() * 28.0f);
     UChronicleDialogueEditorLibrary::AddDialogueNode(DialogueTree.Get(), NodeType, Position, NewNodeGuid, Error);
+    if (NewNodeGuid.IsValid())
+    {
+        SelectedNodeGuid = NewNodeGuid;
+    }
 
     RefreshCanvas();
+    RefreshInspector();
     RefreshValidationSummary();
     return FReply::Handled();
 }
@@ -180,10 +495,108 @@ FReply SDialogueTreeEditor::HandleValidateClicked()
     return FReply::Handled();
 }
 
+FReply SDialogueTreeEditor::HandleNodeSelected(FGuid NodeGuid)
+{
+    SelectedNodeGuid = NodeGuid;
+    RefreshCanvas();
+    RefreshInspector();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleStartLinkClicked(FGuid NodeGuid)
+{
+    PendingEdgeSourceGuid = NodeGuid;
+    SelectedNodeGuid = NodeGuid;
+    RefreshCanvas();
+    RefreshInspector();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleLinkHereClicked(FGuid TargetNodeGuid)
+{
+    if (!DialogueTree.IsValid() || !PendingEdgeSourceGuid.IsValid() || PendingEdgeSourceGuid == TargetNodeGuid)
+    {
+        return FReply::Handled();
+    }
+
+    FDialogueEdge NewEdge;
+    FString Error;
+    if (UChronicleDialogueEditorLibrary::AddDialogueEdge(DialogueTree.Get(), PendingEdgeSourceGuid, TargetNodeGuid, EdgeSlotIndex, EdgeCondition, NewEdge, Error))
+    {
+        SelectedNodeGuid = PendingEdgeSourceGuid;
+    }
+
+    RefreshCanvas();
+    RefreshInspector();
+    RefreshValidationSummary();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleDeleteEdgeClicked(FGuid FromNodeGuid, FGuid ToNodeGuid, int32 FromSlotIndex, FString ConditionExpression)
+{
+    if (!DialogueTree.IsValid())
+    {
+        return FReply::Handled();
+    }
+
+    int32 RemovedCount = 0;
+    FString Error;
+    UChronicleDialogueEditorLibrary::RemoveDialogueEdge(DialogueTree.Get(), FromNodeGuid, ToNodeGuid, FromSlotIndex, ConditionExpression, RemovedCount, Error);
+
+    RefreshCanvas();
+    RefreshInspector();
+    RefreshValidationSummary();
+    return FReply::Handled();
+}
+
+void SDialogueTreeEditor::HandleNodeMoveCommitted(FGuid NodeGuid, FVector2D NewPosition)
+{
+    if (!DialogueTree.IsValid())
+    {
+        return;
+    }
+
+    FString Error;
+    if (UChronicleDialogueEditorLibrary::SetDialogueNodePosition(DialogueTree.Get(), NodeGuid, NewPosition, Error))
+    {
+        RefreshCanvas();
+        RefreshInspector();
+    }
+}
+
+void SDialogueTreeEditor::HandleEdgeSlotChanged(int32 NewValue)
+{
+    EdgeSlotIndex = FMath::Max(0, NewValue);
+}
+
+void SDialogueTreeEditor::HandleEdgeConditionChanged(const FText& InText)
+{
+    EdgeCondition = InText.ToString();
+}
+
 void SDialogueTreeEditor::HandleSearchTextChanged(const FText& InText)
 {
     SearchQuery = InText.ToString();
     RefreshCanvas();
+    RefreshInspector();
+}
+
+int32 SDialogueTreeEditor::GetEdgeSlotIndex() const
+{
+    return EdgeSlotIndex;
+}
+
+FText SDialogueTreeEditor::GetLinkStateText() const
+{
+    if (!PendingEdgeSourceGuid.IsValid())
+    {
+        return LOCTEXT("NoPendingLink", "Click Link From on a source node, then Link Here on a target node.");
+    }
+
+    return FText::Format(
+        LOCTEXT("PendingLink", "Source: {0}\nSlot: {1}"),
+        FText::FromString(GetShortGuid(PendingEdgeSourceGuid)),
+        FText::AsNumber(EdgeSlotIndex));
 }
 
 void SDialogueTreeEditor::RefreshCanvas()
@@ -194,6 +607,16 @@ void SDialogueTreeEditor::RefreshCanvas()
     }
 
     CanvasHost->SetContent(BuildCanvas());
+}
+
+void SDialogueTreeEditor::RefreshInspector()
+{
+    if (!EdgeListHost.IsValid())
+    {
+        return;
+    }
+
+    EdgeListHost->SetContent(BuildEdgeList());
 }
 
 void SDialogueTreeEditor::RefreshValidationSummary()
@@ -241,8 +664,8 @@ TSharedRef<SWidget> SDialogueTreeEditor::BuildCanvas()
     if (!DialogueTree.IsValid())
     {
         return SNew(SBox)
-            .WidthOverride(1600.0f)
-            .HeightOverride(1000.0f)
+            .WidthOverride(CanvasWidth)
+            .HeightOverride(CanvasHeight)
             [
                 Canvas
             ];
@@ -250,6 +673,33 @@ TSharedRef<SWidget> SDialogueTreeEditor::BuildCanvas()
 
     UChronicleDialogueEditorLibrary::SearchDialogueNodes(DialogueTree.Get(), SearchQuery, VisibleNodeGuids);
     TSet<FGuid> VisibleSet(VisibleNodeGuids);
+    const TArray<FDialogueEdge> VisibleEdges = GetVisibleEdges(VisibleSet);
+    TArray<FDialogueEdgeVisual> EdgeVisuals;
+
+    for (const FDialogueEdge& Edge : VisibleEdges)
+    {
+        const FDialogueNode* FromNode = DialogueTree->FindNode(Edge.FromNodeGuid);
+        const FDialogueNode* ToNode = DialogueTree->FindNode(Edge.ToNodeGuid);
+        if (!FromNode || !ToNode)
+        {
+            continue;
+        }
+
+        FDialogueEdgeVisual Visual;
+        Visual.Start = GetNodeCanvasPosition(*FromNode) + FVector2D(NodeWidth, NodeHeight * 0.5f);
+        Visual.End = GetNodeCanvasPosition(*ToNode) + FVector2D(0.0f, NodeHeight * 0.5f);
+        Visual.Color = Edge.FromNodeGuid == SelectedNodeGuid || Edge.ToNodeGuid == SelectedNodeGuid
+            ? FLinearColor(0.95f, 0.76f, 0.16f, 1.0f)
+            : FLinearColor(0.50f, 0.64f, 0.86f, 0.95f);
+        EdgeVisuals.Add(Visual);
+    }
+
+    Canvas->AddSlot()
+    .Offset(FMargin(0.0f, 0.0f, CanvasWidth, CanvasHeight))
+    [
+        SNew(SDialogueEdgeLayer)
+        .Edges(EdgeVisuals)
+    ];
 
     for (const FDialogueNode& Node : DialogueTree->Nodes)
     {
@@ -258,58 +708,123 @@ TSharedRef<SWidget> SDialogueTreeEditor::BuildCanvas()
             continue;
         }
 
-        const FVector2D Position = Node.Position + FVector2D(800.0f, 360.0f);
+        const FVector2D Position = GetNodeCanvasPosition(Node);
         Canvas->AddSlot()
-        .Offset(FMargin(Position.X, Position.Y, 260.0f, 142.0f))
+        .Offset(FMargin(Position.X, Position.Y, NodeWidth, NodeHeight))
         [
             BuildNodeCard(Node)
         ];
     }
 
     return SNew(SBox)
-        .WidthOverride(2400.0f)
-        .HeightOverride(1500.0f)
+        .WidthOverride(CanvasWidth)
+        .HeightOverride(CanvasHeight)
         [
             Canvas
         ];
 }
 
-TSharedRef<SWidget> SDialogueTreeEditor::BuildNodeCard(const FDialogueNode& Node) const
+TSharedRef<SWidget> SDialogueTreeEditor::BuildNodeCard(const FDialogueNode& Node)
 {
-    return SNew(SBorder)
-        .Padding(10.0f)
-        .BorderBackgroundColor(GetNodeColor(Node.NodeType))
+    return SNew(SDialogueNodeCard)
+        .Node(Node)
+        .bSelected(Node.NodeGuid == SelectedNodeGuid)
+        .bCanLinkHere(PendingEdgeSourceGuid.IsValid() && PendingEdgeSourceGuid != Node.NodeGuid)
+        .NodeColor(GetNodeColor(Node.NodeType))
+        .NodeSummary(GetNodeSummary(Node))
+        .OnSelected(this, &SDialogueTreeEditor::HandleNodeSelected)
+        .OnStartLink(this, &SDialogueTreeEditor::HandleStartLinkClicked)
+        .OnLinkHere(this, &SDialogueTreeEditor::HandleLinkHereClicked)
+        .OnMoveCommitted(this, &SDialogueTreeEditor::HandleNodeMoveCommitted);
+}
+
+TSharedRef<SWidget> SDialogueTreeEditor::BuildEdgeList()
+{
+    TSharedRef<SVerticalBox> List = SNew(SVerticalBox);
+    if (!DialogueTree.IsValid() || !SelectedNodeGuid.IsValid())
+    {
+        List->AddSlot()
+        .AutoHeight()
         [
-            SNew(SVerticalBox)
+            SNew(STextBlock)
+            .Text(LOCTEXT("NoSelectedNode", "Select a node to inspect outgoing edges."))
+            .AutoWrapText(true)
+        ];
+        return List;
+    }
 
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            [
-                SNew(STextBlock)
-                .Text(UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(Node.NodeType))
-                .Font(FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
-                .ColorAndOpacity(FLinearColor::White)
-            ]
+    TArray<FDialogueEdge> OutgoingEdges;
+    DialogueTree->GetOutgoingEdges(SelectedNodeGuid, OutgoingEdges);
+    if (OutgoingEdges.Num() == 0)
+    {
+        List->AddSlot()
+        .AutoHeight()
+        [
+            SNew(STextBlock)
+            .Text(LOCTEXT("NoOutgoingEdges", "No outgoing edges."))
+            .AutoWrapText(true)
+        ];
+        return List;
+    }
 
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0.0f, 4.0f)
-            [
-                SNew(STextBlock)
-                .Text(FText::FromString(GetNodeSummary(Node)))
-                .AutoWrapText(true)
-                .ColorAndOpacity(FLinearColor::White)
-            ]
+    for (const FDialogueEdge& Edge : OutgoingEdges)
+    {
+        const FString EdgeSummary = FString::Printf(
+            TEXT("Slot %d -> %s%s"),
+            Edge.FromSlotIndex,
+            *GetShortGuid(Edge.ToNodeGuid),
+            Edge.ConditionExpression.IsEmpty() ? TEXT("") : *FString::Printf(TEXT("\nif %s"), *Edge.ConditionExpression));
 
-            + SVerticalBox::Slot()
-            .AutoHeight()
-            .Padding(0.0f, 4.0f)
+        List->AddSlot()
+        .AutoHeight()
+        .Padding(0.0f, 2.0f)
+        [
+            SNew(SBorder)
+            .Padding(6.0f)
+            .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
             [
-                SNew(STextBlock)
-                .Text(FText::FromString(GetShortGuid(Node.NodeGuid)))
-                .ColorAndOpacity(FLinearColor(0.9f, 0.9f, 0.9f, 0.8f))
+                SNew(SHorizontalBox)
+
+                + SHorizontalBox::Slot()
+                .FillWidth(1.0f)
+                [
+                    SNew(STextBlock)
+                    .Text(FText::FromString(EdgeSummary))
+                    .AutoWrapText(true)
+                ]
+
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .Padding(6.0f, 0.0f, 0.0f, 0.0f)
+                [
+                    SNew(SButton)
+                    .Text(LOCTEXT("DeleteEdge", "Delete"))
+                    .OnClicked(this, &SDialogueTreeEditor::HandleDeleteEdgeClicked, Edge.FromNodeGuid, Edge.ToNodeGuid, Edge.FromSlotIndex, Edge.ConditionExpression)
+                ]
             ]
         ];
+    }
+
+    return List;
+}
+
+TArray<FDialogueEdge> SDialogueTreeEditor::GetVisibleEdges(const TSet<FGuid>& VisibleSet) const
+{
+    TArray<FDialogueEdge> VisibleEdges;
+    if (!DialogueTree.IsValid())
+    {
+        return VisibleEdges;
+    }
+
+    for (const FDialogueEdge& Edge : DialogueTree->Edges)
+    {
+        if (VisibleSet.Contains(Edge.FromNodeGuid) && VisibleSet.Contains(Edge.ToNodeGuid))
+        {
+            VisibleEdges.Add(Edge);
+        }
+    }
+
+    return VisibleEdges;
 }
 
 FLinearColor SDialogueTreeEditor::GetNodeColor(EDialogueNodeType NodeType) const
@@ -366,4 +881,3 @@ FString SDialogueTreeEditor::GetShortGuid(const FGuid& Guid) const
 }
 
 #undef LOCTEXT_NAMESPACE
-

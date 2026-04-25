@@ -63,6 +63,140 @@ bool UChronicleDialogueEditorLibrary::AddDialogueNode(UDialogueTree* Tree, EDial
     return true;
 }
 
+bool UChronicleDialogueEditorLibrary::SetDialogueNodePosition(UDialogueTree* Tree, const FGuid& NodeGuid, FVector2D Position, FString& OutError)
+{
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    if (!NodeGuid.IsValid())
+    {
+        OutError = TEXT("Node GUID is invalid.");
+        return false;
+    }
+
+    FDialogueNode* Node = Tree->FindNodeMutable(NodeGuid);
+    if (!Node)
+    {
+        OutError = TEXT("Node was not found in the dialogue tree.");
+        return false;
+    }
+
+    Tree->Modify();
+    Node->Position = Position;
+    Tree->MarkPackageDirty();
+
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::AddDialogueEdge(UDialogueTree* Tree, const FGuid& FromNodeGuid, const FGuid& ToNodeGuid, int32 FromSlotIndex, const FString& ConditionExpression, FDialogueEdge& OutEdge, FString& OutError)
+{
+    OutEdge = FDialogueEdge();
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    if (!FromNodeGuid.IsValid() || !ToNodeGuid.IsValid())
+    {
+        OutError = TEXT("Both edge endpoints must have valid GUIDs.");
+        return false;
+    }
+
+    if (FromSlotIndex < 0)
+    {
+        OutError = TEXT("Edge output slot must be zero or greater.");
+        return false;
+    }
+
+    if (!Tree->FindNode(FromNodeGuid))
+    {
+        OutError = TEXT("Edge source node was not found in the dialogue tree.");
+        return false;
+    }
+
+    if (!Tree->FindNode(ToNodeGuid))
+    {
+        OutError = TEXT("Edge target node was not found in the dialogue tree.");
+        return false;
+    }
+
+    const FString TrimmedCondition = ConditionExpression.TrimStartAndEnd();
+    const bool bDuplicate = Tree->Edges.ContainsByPredicate([&](const FDialogueEdge& Edge)
+    {
+        return Edge.FromNodeGuid == FromNodeGuid
+            && Edge.ToNodeGuid == ToNodeGuid
+            && Edge.FromSlotIndex == FromSlotIndex
+            && Edge.ConditionExpression.TrimStartAndEnd().Equals(TrimmedCondition, ESearchCase::CaseSensitive);
+    });
+
+    if (bDuplicate)
+    {
+        OutError = TEXT("An identical dialogue edge already exists.");
+        return false;
+    }
+
+    Tree->Modify();
+
+    FDialogueEdge NewEdge;
+    NewEdge.FromNodeGuid = FromNodeGuid;
+    NewEdge.ToNodeGuid = ToNodeGuid;
+    NewEdge.FromSlotIndex = FromSlotIndex;
+    NewEdge.ConditionExpression = TrimmedCondition;
+    Tree->Edges.Add(NewEdge);
+    Tree->MarkPackageDirty();
+
+    OutEdge = NewEdge;
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::RemoveDialogueEdge(UDialogueTree* Tree, const FGuid& FromNodeGuid, const FGuid& ToNodeGuid, int32 FromSlotIndex, const FString& ConditionExpression, int32& OutRemovedCount, FString& OutError)
+{
+    OutRemovedCount = 0;
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    if (!FromNodeGuid.IsValid() || !ToNodeGuid.IsValid())
+    {
+        OutError = TEXT("Both edge endpoints must have valid GUIDs.");
+        return false;
+    }
+
+    const FString TrimmedCondition = ConditionExpression.TrimStartAndEnd();
+    Tree->Modify();
+
+    for (int32 Index = Tree->Edges.Num() - 1; Index >= 0; --Index)
+    {
+        const FDialogueEdge& Edge = Tree->Edges[Index];
+        if (Edge.FromNodeGuid == FromNodeGuid
+            && Edge.ToNodeGuid == ToNodeGuid
+            && Edge.FromSlotIndex == FromSlotIndex
+            && Edge.ConditionExpression.TrimStartAndEnd().Equals(TrimmedCondition, ESearchCase::CaseSensitive))
+        {
+            Tree->Edges.RemoveAt(Index);
+            ++OutRemovedCount;
+        }
+    }
+
+    if (OutRemovedCount == 0)
+    {
+        OutError = TEXT("No matching dialogue edge was found.");
+        return false;
+    }
+
+    Tree->MarkPackageDirty();
+    OutError.Reset();
+    return true;
+}
+
 int32 UChronicleDialogueEditorLibrary::SearchDialogueNodes(UDialogueTree* Tree, const FString& Query, TArray<FGuid>& OutNodeGuids)
 {
     OutNodeGuids.Reset();
@@ -146,4 +280,3 @@ FText UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(EDialogueNodeType 
 }
 
 #undef LOCTEXT_NAMESPACE
-
