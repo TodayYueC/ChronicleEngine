@@ -1,0 +1,20 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.3",
+  "Category": "Chronicle",
+  "Description": "Minimal host project for the Chronicle Engine plugin.",
+  "Modules": [
+    {
+      "Name": "ChronicleHost",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "ChronicleEngine",
+      "Enabled": true
+    }
+  ]
+}
+

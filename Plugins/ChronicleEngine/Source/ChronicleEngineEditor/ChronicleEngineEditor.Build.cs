@@ -1,0 +1,28 @@
+using UnrealBuildTool;
+
+public class ChronicleEngineEditor : ModuleRules
+{
+    public ChronicleEngineEditor(ReadOnlyTargetRules Target) : base(Target)
+    {
+        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+
+        PublicDependencyModuleNames.AddRange(new[]
+        {
+            "Core",
+            "CoreUObject",
+            "Engine",
+            "ChronicleEngine"
+        });
+
+        PrivateDependencyModuleNames.AddRange(new[]
+        {
+            "AssetTools",
+            "Json",
+            "JsonUtilities",
+            "Slate",
+            "SlateCore",
+            "UnrealEd"
+        });
+    }
+}
+

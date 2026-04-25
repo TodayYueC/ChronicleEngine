@@ -1,0 +1,27 @@
+# Unreal build output
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+
+# Visual Studio / Rider
+*.sln
+*.suo
+*.user
+*.opensdf
+*.sdf
+*.VC.db
+.idea/
+
+# Unreal generated project files
+*.xcodeproj
+*.xcworkspace
+
+# Local automation logs
+AutomationReports/
+TestResults/
+
+# Chronicle soft-lock working files
+.chronicle/locks/
+
