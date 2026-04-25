@@ -2,6 +2,8 @@
 
 #include "AssetTypeActions_Base.h"
 
+class IToolkitHost;
+
 class FChronicleAssetTypeActionsBase : public FAssetTypeActions_Base
 {
 public:
@@ -14,6 +16,7 @@ class FAssetTypeActions_DialogueTree final : public FChronicleAssetTypeActionsBa
 public:
     virtual FText GetName() const override;
     virtual UClass* GetSupportedClass() const override;
+    virtual void OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor = TSharedPtr<IToolkitHost>()) override;
 };
 
 class FAssetTypeActions_DialogueDatabase final : public FChronicleAssetTypeActionsBase
@@ -29,4 +32,3 @@ public:
     virtual FText GetName() const override;
     virtual UClass* GetSupportedClass() const override;
 };
-

@@ -3,6 +3,7 @@
 #include "Data/DialogueDatabase.h"
 #include "Data/DialogueTree.h"
 #include "Data/SpeakerProfile.h"
+#include "Editor/DialogueTreeEditorToolkit.h"
 
 #define LOCTEXT_NAMESPACE "ChronicleAssetTypeActions"
 
@@ -14,6 +15,18 @@ FText FAssetTypeActions_DialogueTree::GetName() const
 UClass* FAssetTypeActions_DialogueTree::GetSupportedClass() const
 {
     return UDialogueTree::StaticClass();
+}
+
+void FAssetTypeActions_DialogueTree::OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor)
+{
+    for (UObject* Object : InObjects)
+    {
+        if (UDialogueTree* DialogueTree = Cast<UDialogueTree>(Object))
+        {
+            const TSharedRef<FDialogueTreeEditorToolkit> EditorToolkit = MakeShared<FDialogueTreeEditorToolkit>();
+            EditorToolkit->Initialize(DialogueTree, EditWithinLevelEditor);
+        }
+    }
 }
 
 FText FAssetTypeActions_DialogueDatabase::GetName() const
@@ -37,4 +50,3 @@ UClass* FAssetTypeActions_SpeakerProfile::GetSupportedClass() const
 }
 
 #undef LOCTEXT_NAMESPACE
-

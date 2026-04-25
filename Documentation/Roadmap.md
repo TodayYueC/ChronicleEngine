@@ -19,9 +19,12 @@ Status: current implementation pass.
 
 ## M3 Editor Experience
 
-- Implement Slate graph editing for `UDialogueTree`.
-- Add details customizations, search, breakpoints, and a PIE debugger panel.
-- Add soft-lock metadata for Database and Tree editing.
+Status: current implementation pass.
+
+- Dialogue Tree assets open in a Chronicle custom asset editor instead of the default details-only view.
+- Added a Slate node canvas with colored node cards, search filtering, validation summary, and basic Speech/Choice/Condition node creation.
+- Added editor helper APIs for node creation, node search, and node display names.
+- Remaining: true pin-based graph connections, drag/drop node movement, details customization, breakpoints, PIE debugger, and soft-lock metadata.
 
 ## M4 Presentation
 

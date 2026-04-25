@@ -18,8 +18,10 @@ public class ChronicleEngineEditor : ModuleRules
         PrivateDependencyModuleNames.AddRange(new[]
         {
             "AssetTools",
+            "EditorFramework",
             "Json",
             "JsonUtilities",
+            "PropertyEditor",
             "Slate",
             "SlateCore",
             "UnrealEd"
