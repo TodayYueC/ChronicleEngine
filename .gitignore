@@ -25,3 +25,11 @@ TestResults/
 # Chronicle soft-lock working files
 .chronicle/locks/
 
+# Internal requirement / planning drafts
+01_PRD_*.md
+*_PRD_*.md
+*需求文档*.md
+Documentation/PRD/
+Documentation/Requirements/
+PRD/
+Requirements/
