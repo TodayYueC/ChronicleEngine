@@ -1,6 +1,6 @@
 # Chronicle Engine
 
-Chronicle Engine is a UE5 JRPG narrative-system plugin planned from `01_PRD_项目需求文档.md`.
+Chronicle Engine is an MIT-licensed UE5 plugin for JRPG-style dialogue and narrative systems. It is being built as a production-oriented Runtime + Editor toolchain with a minimal host project for compilation, automated tests, and vertical-slice validation.
 
 This repository contains:
 
@@ -10,7 +10,7 @@ This repository contains:
 
 ## Current Milestone
 
-M2 focuses on asset-pipeline workflow around the runnable runtime vertical slice:
+M3 focuses on editor workflow around the runnable runtime and asset-pipeline foundation:
 
 - dialogue data assets
 - variable storage
@@ -48,3 +48,7 @@ See:
 
 - `Documentation/AssetPipeline.md` for the current JSON, CSV, and validation workflow.
 - `Documentation/EditorWorkflow.md` for the current Dialogue Tree editor workflow.
+
+## License
+
+Chronicle Engine is open source under the MIT License. See `LICENSE`.
