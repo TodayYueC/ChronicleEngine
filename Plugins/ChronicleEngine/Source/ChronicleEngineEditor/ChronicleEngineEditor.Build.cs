@@ -11,7 +11,8 @@ public class ChronicleEngineEditor : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
-            "ChronicleEngine"
+            "ChronicleEngine",
+            "GameplayTags"
         });
 
         PrivateDependencyModuleNames.AddRange(new[]
@@ -25,4 +26,3 @@ public class ChronicleEngineEditor : ModuleRules
         });
     }
 }
-

@@ -10,7 +10,7 @@ This repository contains:
 
 ## Current Milestone
 
-M1 focuses on a runnable runtime vertical slice:
+M2 focuses on asset-pipeline workflow around the runnable runtime vertical slice:
 
 - dialogue data assets
 - variable storage
@@ -18,6 +18,9 @@ M1 focuses on a runnable runtime vertical slice:
 - dialogue runner traversal for Root, Speech, Choice, Condition, Event, and Wait nodes
 - presenter-facing delegates
 - inline tag parsing
+- stable JSON export/import for `UDialogueTree`
+- CSV export/import for dialogue-line text handoff
+- structural validation for broken edges and unreachable nodes
 - automation tests
 
 ## Build Baseline
@@ -39,3 +42,4 @@ Run automation tests:
 R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGtalking\ChronicleHost.uproject" -Unattended -NullRHI -NoSplash -NoSound -ExecCmds="Automation RunTests Chronicle; Quit"
 ```
 
+See `Documentation/AssetPipeline.md` for the current JSON, CSV, and validation workflow.

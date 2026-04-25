@@ -12,8 +12,8 @@ public class ChronicleEngineTests : ModuleRules
             "CoreUObject",
             "Engine",
             "GameplayTags",
-            "ChronicleEngine"
+            "ChronicleEngine",
+            "ChronicleEngineEditor"
         });
     }
 }
-

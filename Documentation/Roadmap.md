@@ -10,9 +10,12 @@ Acceptance:
 
 ## M2 Asset Pipeline
 
-- Expand JSON import/export into a stable text workflow.
-- Add CSV import/export for localization and writer workflows.
-- Add localization gather helpers.
+Status: current implementation pass.
+
+- Stable JSON import/export with schema marker and deterministic node/edge ordering.
+- CSV export/import for localization and writer text handoff.
+- Dialogue-tree validation for missing root, broken edges, duplicate node GUIDs, empty content warnings, and unreachable nodes.
+- Remaining: localization gather helpers and richer external spreadsheet creation workflows.
 
 ## M3 Editor Experience
 
@@ -31,4 +34,3 @@ Acceptance:
 - Optimize traversal and memory behavior.
 - Validate compatibility across UE 5.3 and UE 5.7.
 - Publish release notes and package the plugin.
-
