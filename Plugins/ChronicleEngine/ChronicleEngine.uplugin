@@ -1,7 +1,7 @@
 {
   "FileVersion": 3,
-  "Version": 1,
-  "VersionName": "0.1.0",
+  "Version": 4,
+  "VersionName": "0.4.0",
   "FriendlyName": "Chronicle Engine",
   "Description": "A UE5 JRPG narrative runtime and editor plugin.",
   "Category": "Narrative",
@@ -27,4 +27,3 @@
     }
   ]
 }
-

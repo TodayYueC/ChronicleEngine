@@ -29,9 +29,15 @@ Status: complete for the planned M3 scope.
 
 ## M4 Presentation
 
-- Add default UMG widgets.
-- Add camera, audio, skip, auto, backlog, and rollback presentation flows.
-- Add sample map and example content.
+Status: complete for the planned source-first M4 scope.
+
+- Added `UChronicleDialoguePresentationController` as the UI-facing orchestration layer over `UDialogueRunner`.
+- Added `UChronicleDialogueWidget`, an abstract UMG base widget that implements `IDialoguePresenter` and exposes Blueprint events/actions.
+- Added auto advance, skip mode, presentation backlog, rollback sync, choice forwarding, and line-completion presenter hooks.
+- Added camera and audio presentation cue tags through `Chronicle.Camera.*` and `Chronicle.Audio.*`.
+- Added `AChronicleDialogueDemoActor`, which builds and starts a small runtime demo tree without tracking binary sample assets.
+- Added automation coverage for backlog, auto, skip, rollback, choice forwarding, camera cue payloads, and voice IDs.
+- Remaining release polish moves to M5: packaged demo content, optional binary showcase map, and broader compatibility hardening.
 
 ## M5 Hardening And Release
 

@@ -3,6 +3,7 @@
 #include "ChronicleTestListener.h"
 #include "Data/DialogueTree.h"
 #include "GameplayTagsManager.h"
+#include "Presentation/ChronicleDialoguePresentationController.h"
 #include "Runtime/DialogueConditionEvaluator.h"
 #include "Runtime/DialogueRunner.h"
 #include "Runtime/DialogueTextParser.h"
@@ -49,6 +50,33 @@ UDialogueTree* MakeLinearTree(const FText& Text)
     Line.SpeakerTag = Tag(TEXT("Chronicle.Speaker.Alice"));
     Line.Text = Text;
     Tree->FindNodeMutable(SpeechGuid)->Lines.Add(Line);
+
+    AddEdge(Tree, RootGuid, SpeechGuid);
+    return Tree;
+}
+
+UDialogueTree* MakeTwoLineTree()
+{
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+
+    const FGuid RootGuid = AddNode(Tree, EDialogueNodeType::Root);
+    const FGuid SpeechGuid = AddNode(Tree, EDialogueNodeType::Speech);
+    Tree->RootNodeGuid = RootGuid;
+
+    FDialogueLine FirstLine;
+    FirstLine.LineID = TEXT("Line_001");
+    FirstLine.SpeakerTag = Tag(TEXT("Chronicle.Speaker.Alice"));
+    FirstLine.Text = FText::FromString(TEXT("first"));
+    FirstLine.VoiceID = TEXT("VO_First");
+    Tree->FindNodeMutable(SpeechGuid)->Lines.Add(FirstLine);
+
+    FDialogueLine SecondLine;
+    SecondLine.LineID = TEXT("Line_002");
+    SecondLine.SpeakerTag = Tag(TEXT("Chronicle.Speaker.Alice"));
+    SecondLine.Text = FText::FromString(TEXT("second"));
+    SecondLine.VoiceID = TEXT("VO_Second");
+    Tree->FindNodeMutable(SpeechGuid)->Lines.Add(SecondLine);
 
     AddEdge(Tree, RootGuid, SpeechGuid);
     return Tree;
@@ -287,6 +315,112 @@ bool FChronicleRunnerSaveRollbackTest::RunTest(const FString& Parameters)
 
     Runner->PerformRollback(1);
     TestTrue(TEXT("Rollback leaves runner in a valid state"), Runner->GetRunnerState() == EDialogueRunnerState::Running || Runner->GetRunnerState() == EDialogueRunnerState::WaitingForInput);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChroniclePresentationBacklogAutoRollbackTest, "Chronicle.Presentation.BacklogAutoRollback", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChroniclePresentationBacklogAutoRollbackTest::RunTest(const FString& Parameters)
+{
+    UDialogueRunner* Runner = NewObject<UDialogueRunner>();
+    Runner->Initialize(nullptr);
+
+    UChronicleDialoguePresentationController* Controller = NewObject<UChronicleDialoguePresentationController>();
+    Controller->BindRunner(Runner);
+
+    UDialogueTree* Tree = ChronicleTests::MakeTwoLineTree();
+    Controller->StartDialogue(Tree);
+
+    TestEqual(TEXT("Presentation backlog captures first line"), Controller->GetBacklog().Num(), 1);
+    TestEqual(TEXT("First line is exposed"), Controller->GetLastLine().Text.ToString(), FString(TEXT("first")));
+    TestEqual(TEXT("Voice id is preserved for presentation"), Controller->GetLastLine().VoiceID, FName(TEXT("VO_First")));
+
+    Controller->SetAutoAdvanceEnabled(true, 0.25f);
+    Controller->TickPresentation(0.25f);
+
+    TestEqual(TEXT("Auto advance presents second line"), Controller->GetLastLine().Text.ToString(), FString(TEXT("second")));
+    TestEqual(TEXT("Backlog contains both lines"), Controller->GetBacklog().Num(), 2);
+
+    Controller->RequestRollback(1);
+    TestEqual(TEXT("Rollback syncs presentation backlog to runner history"), Controller->GetBacklog().Num(), 1);
+    TestEqual(TEXT("Rollback leaves runner waiting on the restored line"), Runner->GetRunnerState(), EDialogueRunnerState::WaitingForInput);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChroniclePresentationSkipChoiceCueTest, "Chronicle.Presentation.SkipChoiceCue", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChroniclePresentationSkipChoiceCueTest::RunTest(const FString& Parameters)
+{
+    UDialogueRunner* Runner = NewObject<UDialogueRunner>();
+    Runner->Initialize(nullptr);
+
+    UChronicleDialoguePresentationController* Controller = NewObject<UChronicleDialoguePresentationController>();
+    Controller->BindRunner(Runner);
+
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+    const FGuid RootGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Root);
+    const FGuid CameraGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Event);
+    const FGuid SpeechGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    const FGuid ChoiceGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Choice);
+    const FGuid LongGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    const FGuid ShortGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    Tree->RootNodeGuid = RootGuid;
+
+    FDialogueNode* CameraNode = Tree->FindNodeMutable(CameraGuid);
+    CameraNode->EventTag = ChronicleTests::Tag(TEXT("Chronicle.Camera.Cut"));
+    CameraNode->EventPayload.Add(TEXT("Shot"), TEXT("AutomationShot"));
+
+    FDialogueLine FirstLine;
+    FirstLine.LineID = TEXT("Skip_001");
+    FirstLine.Text = FText::FromString(TEXT("skip first"));
+    FirstLine.VoiceID = TEXT("VO_Skip_First");
+    Tree->FindNodeMutable(SpeechGuid)->Lines.Add(FirstLine);
+
+    FDialogueLine SecondLine;
+    SecondLine.LineID = TEXT("Skip_002");
+    SecondLine.Text = FText::FromString(TEXT("skip second"));
+    SecondLine.VoiceID = TEXT("VO_Skip_Second");
+    Tree->FindNodeMutable(SpeechGuid)->Lines.Add(SecondLine);
+
+    FDialogueChoice LongChoice;
+    LongChoice.Text = FText::FromString(TEXT("Long"));
+    Tree->FindNodeMutable(ChoiceGuid)->Choices.Add(LongChoice);
+
+    FDialogueChoice ShortChoice;
+    ShortChoice.Text = FText::FromString(TEXT("Short"));
+    Tree->FindNodeMutable(ChoiceGuid)->Choices.Add(ShortChoice);
+
+    FDialogueLine LongLine;
+    LongLine.LineID = TEXT("LongResult");
+    LongLine.Text = FText::FromString(TEXT("long result"));
+    Tree->FindNodeMutable(LongGuid)->Lines.Add(LongLine);
+
+    FDialogueLine ShortLine;
+    ShortLine.LineID = TEXT("ShortResult");
+    ShortLine.Text = FText::FromString(TEXT("short result"));
+    Tree->FindNodeMutable(ShortGuid)->Lines.Add(ShortLine);
+
+    ChronicleTests::AddEdge(Tree, RootGuid, CameraGuid);
+    ChronicleTests::AddEdge(Tree, CameraGuid, SpeechGuid);
+    ChronicleTests::AddEdge(Tree, SpeechGuid, ChoiceGuid);
+    ChronicleTests::AddEdge(Tree, ChoiceGuid, LongGuid, 0);
+    ChronicleTests::AddEdge(Tree, ChoiceGuid, ShortGuid, 1);
+
+    Controller->StartDialogue(Tree);
+    TestEqual(TEXT("Camera cue is forwarded to presentation"), Controller->GetLastEventData().EventTag, ChronicleTests::Tag(TEXT("Chronicle.Camera.Cut")));
+    TestEqual(TEXT("Camera payload is preserved"), Controller->GetLastEventData().Payload.FindRef(TEXT("Shot")), FString(TEXT("AutomationShot")));
+
+    Controller->SetSkipModeEnabled(true);
+    Controller->TickPresentation(0.0f);
+
+    TestEqual(TEXT("Skip drains speech until choices"), Runner->GetRunnerState(), EDialogueRunnerState::WaitingForChoice);
+    TestEqual(TEXT("Skip exposes instant reveal mode"), Controller->GetLastRevealMode(), ETextRevealMode::Instant);
+    TestEqual(TEXT("Skip captures skipped lines in backlog"), Controller->GetBacklog().Num(), 2);
+    TestEqual(TEXT("Choices are exposed through presentation controller"), Controller->GetPresentedChoices().Num(), 2);
+
+    Controller->SelectChoice(1);
+    TestEqual(TEXT("Choice selection forwards to selected branch"), Controller->GetLastLine().Text.ToString(), FString(TEXT("short result")));
 
     return true;
 }

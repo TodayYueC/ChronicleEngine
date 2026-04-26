@@ -34,6 +34,9 @@ public:
     void OnChoicesPresented(const TArray<FDialogueChoice>& Choices);
 
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category="Chronicle|Presenter")
+    void OnDialogueEvent(const FDialogueEventData& EventData);
+
+    UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category="Chronicle|Presenter")
     void OnChoiceSelected(int32 ChoiceIndex);
 
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category="Chronicle|Presenter")
@@ -45,4 +48,3 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category="Chronicle|Presenter")
     void HandleInlineTag(const FGameplayTag& Tag, const FString& Params);
 };
-

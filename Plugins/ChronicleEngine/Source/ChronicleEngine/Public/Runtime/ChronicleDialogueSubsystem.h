@@ -6,6 +6,7 @@
 
 class UDialogueDatabase;
 class UDialogueRunner;
+class UChronicleDialoguePresentationController;
 
 UCLASS()
 class CHRONICLEENGINE_API UChronicleDialogueSubsystem : public UGameInstanceSubsystem
@@ -20,10 +21,15 @@ public:
     UDialogueRunner* GetDialogueRunner();
 
     UFUNCTION(BlueprintCallable, Category="Chronicle|Dialogue")
+    UChronicleDialoguePresentationController* GetPresentationController();
+
+    UFUNCTION(BlueprintCallable, Category="Chronicle|Dialogue")
     void InitializeDialogueDatabase(UDialogueDatabase* Database);
 
 private:
     UPROPERTY()
     TObjectPtr<UDialogueRunner> DialogueRunner;
-};
 
+    UPROPERTY()
+    TObjectPtr<UChronicleDialoguePresentationController> PresentationController;
+};

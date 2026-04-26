@@ -11,8 +11,14 @@ public class ChronicleEngine : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
-            "GameplayTags"
+            "GameplayTags",
+            "UMG"
+        });
+
+        PrivateDependencyModuleNames.AddRange(new[]
+        {
+            "Slate",
+            "SlateCore"
         });
     }
 }
-

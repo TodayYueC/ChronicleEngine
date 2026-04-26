@@ -17,6 +17,7 @@ Saved/
 # Unreal generated project files
 *.xcodeproj
 *.xcworkspace
+Config/DefaultInput.ini
 
 # Local automation logs
 AutomationReports/

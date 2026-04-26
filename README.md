@@ -10,13 +10,18 @@ This repository contains:
 
 ## Current Milestone
 
-M3 editor workflow is complete on top of the runnable runtime and asset-pipeline foundation:
+M4 presentation workflow is complete on top of the runnable runtime, asset-pipeline, and editor foundation:
 
 - dialogue data assets
 - variable storage
 - condition-expression evaluation
 - dialogue runner traversal for Root, Speech, Choice, Condition, Event, and Wait nodes
 - presenter-facing delegates
+- presentation controller for UI-facing state and flow control
+- abstract UMG widget base with Blueprint presentation events
+- auto, skip, backlog, rollback, and choice forwarding flows
+- camera and voice presentation cue tags
+- source-generated demo dialogue actor
 - inline tag parsing
 - stable JSON export/import for `UDialogueTree`
 - CSV export/import for dialogue-line text handoff
@@ -48,6 +53,7 @@ See:
 
 - `Documentation/AssetPipeline.md` for the current JSON, CSV, and validation workflow.
 - `Documentation/EditorWorkflow.md` for the current Dialogue Tree editor workflow.
+- `Documentation/PresentationWorkflow.md` for the current UMG and presentation-controller workflow.
 
 ## License
 
