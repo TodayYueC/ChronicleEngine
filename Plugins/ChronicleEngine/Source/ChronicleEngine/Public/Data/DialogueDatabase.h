@@ -7,6 +7,7 @@
 #include "DialogueDatabase.generated.h"
 
 class UDialogueTree;
+class UDataTable;
 class USpeakerProfile;
 
 USTRUCT(BlueprintType)

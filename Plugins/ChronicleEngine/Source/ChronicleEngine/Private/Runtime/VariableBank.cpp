@@ -99,7 +99,17 @@ FVariableValue UVariableBank::GetVariable(FGameplayTag Tag, bool& bFound) const
 
 bool UVariableBank::GetVariableByName(FName VariableName, FVariableValue& OutValue) const
 {
-    const FGameplayTag Tag = UGameplayTagsManager::Get().RequestGameplayTag(VariableName, false);
+    FGameplayTag Tag;
+    if (const FGameplayTag* CachedTag = VariableNameCache.Find(VariableName))
+    {
+        Tag = *CachedTag;
+    }
+    else
+    {
+        Tag = UGameplayTagsManager::Get().RequestGameplayTag(VariableName, false);
+        VariableNameCache.Add(VariableName, Tag);
+    }
+
     if (!Tag.IsValid())
     {
         return false;

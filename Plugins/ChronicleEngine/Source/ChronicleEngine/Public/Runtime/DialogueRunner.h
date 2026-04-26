@@ -98,11 +98,16 @@ private:
     bool FollowFirstEdge();
     bool FollowEdgeBySlot(int32 SlotIndex);
     bool FollowEdge(const FDialogueEdge& Edge);
+    bool EvaluateConditionExpression(const FString& Expression) const;
     bool EvaluateEdgeCondition(const FDialogueEdge& Edge) const;
     bool EvaluateChoiceCondition(const FDialogueChoice& Choice) const;
     bool SelectConditionBranch(const FDialogueNode& Node, FDialogueEdge& OutEdge) const;
     void PushMemento();
     FString MakeSeenHash(const FDialogueLine& Line) const;
+    void BuildRuntimeLookup();
+    void ResetRuntimeLookup();
+    const FDialogueNode* FindRuntimeNode(const FGuid& NodeGuid) const;
+    const TArray<int32>* FindRuntimeOutgoingEdges(const FGuid& NodeGuid) const;
 
     UPROPERTY()
     TObjectPtr<UDialogueDatabase> Database;
@@ -136,5 +141,8 @@ private:
 
     UPROPERTY()
     TArray<int32> PresentedChoiceSlots;
-};
 
+    TMap<FGuid, int32> RuntimeNodeIndices;
+    TMap<FGuid, TArray<int32>> RuntimeOutgoingEdgeIndices;
+    mutable TMap<FString, bool> ConditionResultCache;
+};

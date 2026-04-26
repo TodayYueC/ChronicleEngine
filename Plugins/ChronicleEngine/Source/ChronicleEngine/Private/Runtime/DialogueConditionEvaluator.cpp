@@ -1,6 +1,8 @@
 #include "Runtime/DialogueConditionEvaluator.h"
 
 #include "Core/ChronicleTypes.h"
+#include "HAL/CriticalSection.h"
+#include "Misc/ScopeLock.h"
 #include "Runtime/VariableBank.h"
 
 namespace ChronicleCondition
@@ -189,141 +191,38 @@ private:
     int32 Index = 0;
 };
 
-class FParser
+enum class EExpressionNodeType
 {
-public:
-    FParser(const FString& InExpression, const UVariableBank* InVariableBank)
-        : Lexer(InExpression)
-        , VariableBank(InVariableBank)
+    Literal,
+    Variable,
+    Not,
+    And,
+    Or,
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual
+};
+
+struct FExpressionNode
+{
+    EExpressionNodeType Type = EExpressionNodeType::Literal;
+    FVariableValue Literal;
+    FName VariableName;
+    TSharedPtr<FExpressionNode> Left;
+    TSharedPtr<FExpressionNode> Right;
+
+    FVariableValue Evaluate(const UVariableBank* VariableBank, bool& bSuccess) const
     {
-        Current = Lexer.Next();
-    }
-
-    FVariableValue Parse(bool& bOutSuccess)
-    {
-        bSuccess = true;
-        FVariableValue Result = ParseOr();
-        bOutSuccess = bSuccess && Current.Type == ETokenType::End;
-        return Result;
-    }
-
-private:
-    FVariableValue ParseOr()
-    {
-        FVariableValue Left = ParseAnd();
-        while (Current.Type == ETokenType::Or)
+        switch (Type)
         {
-            Consume();
-            const FVariableValue Right = ParseAnd();
-            Left = FVariableValue::MakeBool(Left.AsBool() || Right.AsBool());
-        }
-        return Left;
-    }
+        case EExpressionNodeType::Literal:
+            return Literal;
 
-    FVariableValue ParseAnd()
-    {
-        FVariableValue Left = ParseEquality();
-        while (Current.Type == ETokenType::And)
+        case EExpressionNodeType::Variable:
         {
-            Consume();
-            const FVariableValue Right = ParseEquality();
-            Left = FVariableValue::MakeBool(Left.AsBool() && Right.AsBool());
-        }
-        return Left;
-    }
-
-    FVariableValue ParseEquality()
-    {
-        FVariableValue Left = ParseComparison();
-        while (Current.Type == ETokenType::Equal || Current.Type == ETokenType::NotEqual)
-        {
-            const ETokenType Operator = Current.Type;
-            Consume();
-            const FVariableValue Right = ParseComparison();
-            const bool bEqual = ValuesEqual(Left, Right);
-            Left = FVariableValue::MakeBool(Operator == ETokenType::Equal ? bEqual : !bEqual);
-        }
-        return Left;
-    }
-
-    FVariableValue ParseComparison()
-    {
-        FVariableValue Left = ParseUnary();
-        while (Current.Type == ETokenType::Greater || Current.Type == ETokenType::GreaterEqual
-            || Current.Type == ETokenType::Less || Current.Type == ETokenType::LessEqual)
-        {
-            const ETokenType Operator = Current.Type;
-            Consume();
-            const FVariableValue Right = ParseUnary();
-
-            if (!Left.IsNumeric() || !Right.IsNumeric())
-            {
-                bSuccess = false;
-                return FVariableValue::MakeBool(false);
-            }
-
-            const double Lhs = Left.AsNumber();
-            const double Rhs = Right.AsNumber();
-            bool bResult = false;
-            switch (Operator)
-            {
-            case ETokenType::Greater:
-                bResult = Lhs > Rhs;
-                break;
-            case ETokenType::GreaterEqual:
-                bResult = Lhs >= Rhs;
-                break;
-            case ETokenType::Less:
-                bResult = Lhs < Rhs;
-                break;
-            case ETokenType::LessEqual:
-                bResult = Lhs <= Rhs;
-                break;
-            default:
-                break;
-            }
-            Left = FVariableValue::MakeBool(bResult);
-        }
-        return Left;
-    }
-
-    FVariableValue ParseUnary()
-    {
-        if (Current.Type == ETokenType::Not)
-        {
-            Consume();
-            return FVariableValue::MakeBool(!ParseUnary().AsBool());
-        }
-
-        return ParsePrimary();
-    }
-
-    FVariableValue ParsePrimary()
-    {
-        switch (Current.Type)
-        {
-        case ETokenType::True:
-            Consume();
-            return FVariableValue::MakeBool(true);
-        case ETokenType::False:
-            Consume();
-            return FVariableValue::MakeBool(false);
-        case ETokenType::Number:
-        {
-            const FString NumberText = Current.Text;
-            Consume();
-            return NumberText.Contains(TEXT(".")) ? FVariableValue::MakeFloat(FCString::Atof(*NumberText)) : FVariableValue::MakeInt(FCString::Atoi(*NumberText));
-        }
-        case ETokenType::String:
-        {
-            const FString Text = Current.Text;
-            Consume();
-            return FVariableValue::MakeString(Text);
-        }
-        case ETokenType::Identifier:
-        {
-            const FName VariableName(*Current.Text);
-            Consume();
             if (!VariableBank)
             {
                 bSuccess = false;
@@ -338,32 +237,303 @@ private:
             }
             return Value;
         }
-        case ETokenType::LeftParen:
+
+        case EExpressionNodeType::Not:
+            return FVariableValue::MakeBool(!EvaluateChild(Left, VariableBank, bSuccess).AsBool());
+
+        case EExpressionNodeType::And:
         {
-            Consume();
-            FVariableValue Value = ParseOr();
-            if (Current.Type != ETokenType::RightParen)
+            const FVariableValue LeftValue = EvaluateChild(Left, VariableBank, bSuccess);
+            if (!bSuccess || !LeftValue.AsBool())
             {
-                bSuccess = false;
-                return FVariableValue();
+                return FVariableValue::MakeBool(false);
             }
-            Consume();
-            return Value;
+            return FVariableValue::MakeBool(EvaluateChild(Right, VariableBank, bSuccess).AsBool());
         }
-        default:
+
+        case EExpressionNodeType::Or:
+        {
+            const FVariableValue LeftValue = EvaluateChild(Left, VariableBank, bSuccess);
+            if (!bSuccess || LeftValue.AsBool())
+            {
+                return FVariableValue::MakeBool(LeftValue.AsBool());
+            }
+            return FVariableValue::MakeBool(EvaluateChild(Right, VariableBank, bSuccess).AsBool());
+        }
+
+        case EExpressionNodeType::Equal:
+        case EExpressionNodeType::NotEqual:
+        case EExpressionNodeType::Greater:
+        case EExpressionNodeType::GreaterEqual:
+        case EExpressionNodeType::Less:
+        case EExpressionNodeType::LessEqual:
+            return EvaluateBinaryComparison(VariableBank, bSuccess);
+        }
+
+        bSuccess = false;
+        return FVariableValue();
+    }
+
+private:
+    static FVariableValue EvaluateChild(const TSharedPtr<FExpressionNode>& Child, const UVariableBank* VariableBank, bool& bSuccess)
+    {
+        if (!Child.IsValid())
+        {
             bSuccess = false;
             return FVariableValue();
         }
+
+        return Child->Evaluate(VariableBank, bSuccess);
     }
 
-    bool ValuesEqual(const FVariableValue& Left, const FVariableValue& Right) const
+    FVariableValue EvaluateBinaryComparison(const UVariableBank* VariableBank, bool& bSuccess) const
     {
-        if (Left.IsNumeric() && Right.IsNumeric())
+        const FVariableValue LeftValue = EvaluateChild(Left, VariableBank, bSuccess);
+        if (!bSuccess)
         {
-            return FMath::IsNearlyEqual(Left.AsNumber(), Right.AsNumber());
+            return FVariableValue::MakeBool(false);
         }
 
-        return Left.AsString().Equals(Right.AsString(), ESearchCase::CaseSensitive);
+        const FVariableValue RightValue = EvaluateChild(Right, VariableBank, bSuccess);
+        if (!bSuccess)
+        {
+            return FVariableValue::MakeBool(false);
+        }
+
+        if (Type == EExpressionNodeType::Equal || Type == EExpressionNodeType::NotEqual)
+        {
+            const bool bEqual = ValuesEqual(LeftValue, RightValue);
+            return FVariableValue::MakeBool(Type == EExpressionNodeType::Equal ? bEqual : !bEqual);
+        }
+
+        if (!LeftValue.IsNumeric() || !RightValue.IsNumeric())
+        {
+            bSuccess = false;
+            return FVariableValue::MakeBool(false);
+        }
+
+        const double Lhs = LeftValue.AsNumber();
+        const double Rhs = RightValue.AsNumber();
+        bool bResult = false;
+        switch (Type)
+        {
+        case EExpressionNodeType::Greater:
+            bResult = Lhs > Rhs;
+            break;
+        case EExpressionNodeType::GreaterEqual:
+            bResult = Lhs >= Rhs;
+            break;
+        case EExpressionNodeType::Less:
+            bResult = Lhs < Rhs;
+            break;
+        case EExpressionNodeType::LessEqual:
+            bResult = Lhs <= Rhs;
+            break;
+        default:
+            break;
+        }
+
+        return FVariableValue::MakeBool(bResult);
+    }
+
+    static bool ValuesEqual(const FVariableValue& LeftValue, const FVariableValue& RightValue)
+    {
+        if (LeftValue.IsNumeric() && RightValue.IsNumeric())
+        {
+            return FMath::IsNearlyEqual(LeftValue.AsNumber(), RightValue.AsNumber());
+        }
+
+        return LeftValue.AsString().Equals(RightValue.AsString(), ESearchCase::CaseSensitive);
+    }
+};
+
+class FParser
+{
+public:
+    explicit FParser(const FString& InExpression)
+        : Lexer(InExpression)
+    {
+        Current = Lexer.Next();
+    }
+
+    TSharedPtr<FExpressionNode> Parse(bool& bOutSuccess)
+    {
+        bSuccess = true;
+        TSharedPtr<FExpressionNode> Result = ParseOr();
+        bOutSuccess = bSuccess && Result.IsValid() && Current.Type == ETokenType::End;
+        return bOutSuccess ? Result : nullptr;
+    }
+
+private:
+    TSharedPtr<FExpressionNode> ParseOr()
+    {
+        TSharedPtr<FExpressionNode> Left = ParseAnd();
+        while (Current.Type == ETokenType::Or)
+        {
+            Consume();
+            Left = MakeBinary(EExpressionNodeType::Or, Left, ParseAnd());
+        }
+        return Left;
+    }
+
+    TSharedPtr<FExpressionNode> ParseAnd()
+    {
+        TSharedPtr<FExpressionNode> Left = ParseEquality();
+        while (Current.Type == ETokenType::And)
+        {
+            Consume();
+            Left = MakeBinary(EExpressionNodeType::And, Left, ParseEquality());
+        }
+        return Left;
+    }
+
+    TSharedPtr<FExpressionNode> ParseEquality()
+    {
+        TSharedPtr<FExpressionNode> Left = ParseComparison();
+        while (Current.Type == ETokenType::Equal || Current.Type == ETokenType::NotEqual)
+        {
+            const EExpressionNodeType Operator = Current.Type == ETokenType::Equal
+                ? EExpressionNodeType::Equal
+                : EExpressionNodeType::NotEqual;
+            Consume();
+            Left = MakeBinary(Operator, Left, ParseComparison());
+        }
+        return Left;
+    }
+
+    TSharedPtr<FExpressionNode> ParseComparison()
+    {
+        TSharedPtr<FExpressionNode> Left = ParseUnary();
+        while (Current.Type == ETokenType::Greater || Current.Type == ETokenType::GreaterEqual
+            || Current.Type == ETokenType::Less || Current.Type == ETokenType::LessEqual)
+        {
+            const EExpressionNodeType Operator = TokenToComparisonNodeType(Current.Type);
+            Consume();
+            Left = MakeBinary(Operator, Left, ParseUnary());
+        }
+        return Left;
+    }
+
+    TSharedPtr<FExpressionNode> ParseUnary()
+    {
+        if (Current.Type == ETokenType::Not)
+        {
+            Consume();
+            return MakeUnary(EExpressionNodeType::Not, ParseUnary());
+        }
+
+        return ParsePrimary();
+    }
+
+    TSharedPtr<FExpressionNode> ParsePrimary()
+    {
+        switch (Current.Type)
+        {
+        case ETokenType::True:
+            Consume();
+            return MakeLiteral(FVariableValue::MakeBool(true));
+
+        case ETokenType::False:
+            Consume();
+            return MakeLiteral(FVariableValue::MakeBool(false));
+
+        case ETokenType::Number:
+        {
+            const FString NumberText = Current.Text;
+            Consume();
+            return MakeLiteral(NumberText.Contains(TEXT("."))
+                ? FVariableValue::MakeFloat(FCString::Atof(*NumberText))
+                : FVariableValue::MakeInt(FCString::Atoi(*NumberText)));
+        }
+
+        case ETokenType::String:
+        {
+            const FString Text = Current.Text;
+            Consume();
+            return MakeLiteral(FVariableValue::MakeString(Text));
+        }
+
+        case ETokenType::Identifier:
+        {
+            const FName VariableName(*Current.Text);
+            Consume();
+            TSharedPtr<FExpressionNode> Node = MakeShared<FExpressionNode>();
+            Node->Type = EExpressionNodeType::Variable;
+            Node->VariableName = VariableName;
+            return Node;
+        }
+
+        case ETokenType::LeftParen:
+        {
+            Consume();
+            TSharedPtr<FExpressionNode> Node = ParseOr();
+            if (Current.Type != ETokenType::RightParen)
+            {
+                bSuccess = false;
+                return nullptr;
+            }
+            Consume();
+            return Node;
+        }
+
+        default:
+            bSuccess = false;
+            return nullptr;
+        }
+    }
+
+    TSharedPtr<FExpressionNode> MakeLiteral(const FVariableValue& Value) const
+    {
+        TSharedPtr<FExpressionNode> Node = MakeShared<FExpressionNode>();
+        Node->Type = EExpressionNodeType::Literal;
+        Node->Literal = Value;
+        return Node;
+    }
+
+    TSharedPtr<FExpressionNode> MakeUnary(EExpressionNodeType Type, TSharedPtr<FExpressionNode> Child)
+    {
+        if (!Child.IsValid())
+        {
+            bSuccess = false;
+            return nullptr;
+        }
+
+        TSharedPtr<FExpressionNode> Node = MakeShared<FExpressionNode>();
+        Node->Type = Type;
+        Node->Left = Child;
+        return Node;
+    }
+
+    TSharedPtr<FExpressionNode> MakeBinary(EExpressionNodeType Type, TSharedPtr<FExpressionNode> Left, TSharedPtr<FExpressionNode> Right)
+    {
+        if (!Left.IsValid() || !Right.IsValid())
+        {
+            bSuccess = false;
+            return nullptr;
+        }
+
+        TSharedPtr<FExpressionNode> Node = MakeShared<FExpressionNode>();
+        Node->Type = Type;
+        Node->Left = Left;
+        Node->Right = Right;
+        return Node;
+    }
+
+    static EExpressionNodeType TokenToComparisonNodeType(ETokenType TokenType)
+    {
+        switch (TokenType)
+        {
+        case ETokenType::Greater:
+            return EExpressionNodeType::Greater;
+        case ETokenType::GreaterEqual:
+            return EExpressionNodeType::GreaterEqual;
+        case ETokenType::Less:
+            return EExpressionNodeType::Less;
+        case ETokenType::LessEqual:
+            return EExpressionNodeType::LessEqual;
+        default:
+            return EExpressionNodeType::Equal;
+        }
     }
 
     void Consume()
@@ -373,9 +543,42 @@ private:
 
     FLexer Lexer;
     FToken Current;
-    const UVariableBank* VariableBank = nullptr;
     bool bSuccess = true;
 };
+
+struct FCompiledExpression
+{
+    TSharedPtr<FExpressionNode> Root;
+    bool bCompileSuccess = false;
+};
+
+FCriticalSection ExpressionCacheCriticalSection;
+TMap<FString, FCompiledExpression> ExpressionCache;
+
+FCompiledExpression GetOrCompileExpression(const FString& TrimmedExpression)
+{
+    FScopeLock Lock(&ExpressionCacheCriticalSection);
+
+    if (const FCompiledExpression* CachedExpression = ExpressionCache.Find(TrimmedExpression))
+    {
+        return *CachedExpression;
+    }
+
+    bool bCompileSuccess = false;
+    FParser Parser(TrimmedExpression);
+    FCompiledExpression CompiledExpression;
+    CompiledExpression.Root = Parser.Parse(bCompileSuccess);
+    CompiledExpression.bCompileSuccess = bCompileSuccess && CompiledExpression.Root.IsValid();
+
+    constexpr int32 MaxCachedExpressions = 256;
+    if (ExpressionCache.Num() >= MaxCachedExpressions)
+    {
+        ExpressionCache.Reset();
+    }
+
+    ExpressionCache.Add(TrimmedExpression, CompiledExpression);
+    return CompiledExpression;
+}
 }
 
 bool UDialogueConditionEvaluator::EvaluateCondition(const FString& Expression, const UVariableBank* VariableBank, bool& bSuccess)
@@ -387,8 +590,26 @@ bool UDialogueConditionEvaluator::EvaluateCondition(const FString& Expression, c
         return true;
     }
 
-    ChronicleCondition::FParser Parser(Trimmed, VariableBank);
-    const FVariableValue Result = Parser.Parse(bSuccess);
+    if (Trimmed.Equals(TEXT("true"), ESearchCase::IgnoreCase))
+    {
+        bSuccess = true;
+        return true;
+    }
+
+    if (Trimmed.Equals(TEXT("false"), ESearchCase::IgnoreCase))
+    {
+        bSuccess = true;
+        return false;
+    }
+
+    const ChronicleCondition::FCompiledExpression CompiledExpression = ChronicleCondition::GetOrCompileExpression(Trimmed);
+    if (!CompiledExpression.bCompileSuccess || !CompiledExpression.Root.IsValid())
+    {
+        bSuccess = false;
+        return false;
+    }
+
+    bSuccess = true;
+    const FVariableValue Result = CompiledExpression.Root->Evaluate(VariableBank, bSuccess);
     return bSuccess && Result.AsBool();
 }
-

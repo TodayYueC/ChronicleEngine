@@ -5,6 +5,9 @@
 #include "GameplayTagContainer.h"
 #include "SpeakerProfile.generated.h"
 
+class UDataTable;
+class UTexture2D;
+
 UENUM(BlueprintType)
 enum class ESpeakerPosition : uint8
 {
@@ -41,4 +44,3 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Chronicle|Speaker")
     ESpeakerPosition DefaultPosition = ESpeakerPosition::Left;
 };
-

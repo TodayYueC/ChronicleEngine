@@ -49,5 +49,5 @@ private:
     TMap<FGameplayTag, FVariableValue> LocalVariables;
 
     TMap<FGameplayTag, FChronicleExternalVariableBinding> ExternalBindings;
+    mutable TMap<FName, FGameplayTag> VariableNameCache;
 };
-

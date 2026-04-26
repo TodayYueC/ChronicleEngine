@@ -22,6 +22,9 @@ Config/DefaultInput.ini
 # Local automation logs
 AutomationReports/
 TestResults/
+Artifacts/
+Dist/
+Packaged/
 
 # Chronicle soft-lock working files
 .chronicle/locks/

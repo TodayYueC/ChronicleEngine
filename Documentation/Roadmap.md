@@ -41,6 +41,12 @@ Status: complete for the planned source-first M4 scope.
 
 ## M5 Hardening And Release
 
-- Optimize traversal and memory behavior.
-- Validate compatibility across UE 5.3 and UE 5.7.
-- Publish release notes and package the plugin.
+Status: current release-candidate hardening pass.
+
+- Runtime traversal now uses per-run node and outgoing-edge lookup tables.
+- Condition expressions compile once into a cached AST, with per-dialogue condition result caching and variable-name tag caching.
+- Rollback mementos are limited to player-visible pause points instead of internal node hops.
+- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.1181ms`.
+- Added release notes, release checklist, and a packaging script.
+- UE 5.7 smoke and UE 5.3 BuildPlugin packaging pass for this release-candidate pass.
+- Remaining before public release: optionally tag `v0.5.0` and attach the package to a GitHub Release.

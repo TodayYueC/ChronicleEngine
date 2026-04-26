@@ -457,9 +457,10 @@ bool FChronicleRunnerPerformanceTest::RunTest(const FString& Parameters)
     Runner->StartDialogue(Tree);
     const double ElapsedMs = (FPlatformTime::Seconds() - StartSeconds) * 1000.0;
 
+    constexpr double EditorTraversalBudgetMs = 0.25;
     AddInfo(FString::Printf(TEXT("100-node condition traversal took %.4f ms in editor automation."), ElapsedMs));
     TestEqual(TEXT("Traversal reaches final line"), Listener->LastLine.Text.ToString(), FString(TEXT("done")));
-    TestTrue(TEXT("100-node traversal stays within editor smoke budget"), ElapsedMs < 5.0);
+    TestTrue(TEXT("100-node traversal stays within hardened editor smoke budget"), ElapsedMs < EditorTraversalBudgetMs);
 
     return true;
 }

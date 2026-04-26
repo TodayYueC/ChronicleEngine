@@ -10,7 +10,7 @@ This repository contains:
 
 ## Current Milestone
 
-M4 presentation workflow is complete on top of the runnable runtime, asset-pipeline, and editor foundation:
+M5 hardening is in progress on top of the runnable runtime, asset-pipeline, editor, and presentation foundation:
 
 - dialogue data assets
 - variable storage
@@ -29,6 +29,8 @@ M4 presentation workflow is complete on top of the runnable runtime, asset-pipel
 - custom Dialogue Tree asset editor foundation
 - native `SGraphEditor` dialogue graph with search selection, validation summary, toolbar and context-menu node creation, position persistence, Details editing, breakpoints, soft locks, and edge create/delete controls
 - automation tests
+- optimized runtime traversal and condition evaluation
+- release checklist and packaging script
 
 ## Build Baseline
 
@@ -54,6 +56,7 @@ See:
 - `Documentation/AssetPipeline.md` for the current JSON, CSV, and validation workflow.
 - `Documentation/EditorWorkflow.md` for the current Dialogue Tree editor workflow.
 - `Documentation/PresentationWorkflow.md` for the current UMG and presentation-controller workflow.
+- `Documentation/ReleaseNotes.md` and `Documentation/ReleaseChecklist.md` for release-candidate packaging.
 
 ## License
 

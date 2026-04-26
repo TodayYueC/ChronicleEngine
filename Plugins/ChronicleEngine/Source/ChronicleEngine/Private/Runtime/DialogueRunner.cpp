@@ -6,6 +6,22 @@
 #include "Runtime/DialogueTextParser.h"
 #include "Runtime/VariableBank.h"
 
+namespace
+{
+bool IsBlankConditionExpression(const FString& Expression)
+{
+    for (int32 Index = 0; Index < Expression.Len(); ++Index)
+    {
+        if (!FChar::IsWhitespace(Expression[Index]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+}
+
 UDialogueRunner::UDialogueRunner()
 {
 }
@@ -49,6 +65,12 @@ void UDialogueRunner::StartDialogue(UDialogueTree* Tree, FName EntryNode)
     History.Reset();
     MementoStack.Reset();
     WaitingEventTag = FGameplayTag();
+    ConditionResultCache.Reset();
+    BuildRuntimeLookup();
+    History.Reserve(64);
+    MementoStack.Reserve(50);
+    SeenDialogueHashes.Reserve(64);
+    PresentedChoiceSlots.Reserve(8);
 
     const TArray<FVariableDefinition> EmptyGlobalDefinitions;
     VariableBank->InitializeFromDefinitions(Database ? Database->GlobalVariables : EmptyGlobalDefinitions, Tree->Variables);
@@ -68,7 +90,7 @@ void UDialogueRunner::Advance()
 
     if (RunnerState == EDialogueRunnerState::WaitingForInput)
     {
-        const FDialogueNode* Node = CurrentTree->FindNode(CurrentNodeGuid);
+        const FDialogueNode* Node = FindRuntimeNode(CurrentNodeGuid);
         if (Node && Node->NodeType == EDialogueNodeType::Speech && Node->Lines.IsValidIndex(CurrentLineIndex + 1))
         {
             ++CurrentLineIndex;
@@ -121,6 +143,8 @@ void UDialogueRunner::EndDialogue()
     CurrentLineIndex = INDEX_NONE;
     WaitingEventTag = FGameplayTag();
     PresentedChoiceSlots.Reset();
+    ConditionResultCache.Reset();
+    ResetRuntimeLookup();
     SetRunnerState(EDialogueRunnerState::Idle);
     OnDialogueEnded.Broadcast(FinishedTree);
 }
@@ -151,6 +175,7 @@ void UDialogueRunner::SetVariable(FGameplayTag Tag, const FVariableValue& Value,
         VariableBank = NewObject<UVariableBank>(this, TEXT("VariableBank"));
     }
 
+    ConditionResultCache.Reset();
     VariableBank->SetVariable(Tag, Value, Scope);
 }
 
@@ -180,6 +205,7 @@ void UDialogueRunner::LoadState(const FDialogueSaveData& InData)
     }
 
     VariableBank->RestoreSnapshot(InData.GlobalVariables, InData.LocalVariables);
+    ConditionResultCache.Reset();
     CurrentNodeGuid = InData.CurrentNodeGuid;
     CurrentLineIndex = InData.CurrentLineIndex;
     History = InData.History;
@@ -223,7 +249,7 @@ void UDialogueRunner::ProcessCurrentNode()
     constexpr int32 MaxTraversalSteps = 1024;
     for (int32 Step = 0; Step < MaxTraversalSteps; ++Step)
     {
-        const FDialogueNode* Node = CurrentTree->FindNode(CurrentNodeGuid);
+        const FDialogueNode* Node = FindRuntimeNode(CurrentNodeGuid);
         if (!Node)
         {
             EndDialogue();
@@ -259,6 +285,8 @@ void UDialogueRunner::ProcessCurrentNode()
         {
             PresentedChoiceSlots.Reset();
             TArray<FDialogueChoice> VisibleChoices;
+            VisibleChoices.Reserve(Node->Choices.Num());
+            PresentedChoiceSlots.Reserve(Node->Choices.Num());
             for (int32 Index = 0; Index < Node->Choices.Num(); ++Index)
             {
                 if (EvaluateChoiceCondition(Node->Choices[Index]))
@@ -313,6 +341,7 @@ void UDialogueRunner::ProcessCurrentNode()
             EventData.Payload = Node->EventPayload;
             EventData.bAsync = Node->bEventIsAsync;
             OnDialogueEvent.Broadcast(EventData);
+            ConditionResultCache.Reset();
 
             if (Node->bEventIsAsync)
             {
@@ -355,7 +384,7 @@ void UDialogueRunner::PresentCurrentLine()
         return;
     }
 
-    const FDialogueNode* Node = CurrentTree->FindNode(CurrentNodeGuid);
+    const FDialogueNode* Node = FindRuntimeNode(CurrentNodeGuid);
     if (!Node || !Node->Lines.IsValidIndex(CurrentLineIndex))
     {
         EndDialogue();
@@ -385,14 +414,13 @@ void UDialogueRunner::PresentCurrentLine()
 
 bool UDialogueRunner::MoveToNode(const FGuid& NodeGuid)
 {
-    if (!CurrentTree || !CurrentTree->FindNode(NodeGuid))
+    if (!CurrentTree || !FindRuntimeNode(NodeGuid))
     {
         return false;
     }
 
     CurrentNodeGuid = NodeGuid;
     CurrentLineIndex = INDEX_NONE;
-    PushMemento();
     return true;
 }
 
@@ -408,18 +436,22 @@ bool UDialogueRunner::FollowEdgeBySlot(int32 SlotIndex)
         return false;
     }
 
-    TArray<FDialogueEdge> Edges;
-    CurrentTree->GetOutgoingEdges(CurrentNodeGuid, Edges);
+    const TArray<int32>* EdgeIndices = FindRuntimeOutgoingEdges(CurrentNodeGuid);
+    if (!EdgeIndices)
+    {
+        return false;
+    }
 
     const FDialogueEdge* FallbackEdge = nullptr;
-    for (const FDialogueEdge& Edge : Edges)
+    for (const int32 EdgeIndex : *EdgeIndices)
     {
+        const FDialogueEdge& Edge = CurrentTree->Edges[EdgeIndex];
         if (Edge.FromSlotIndex != SlotIndex)
         {
             continue;
         }
 
-        if (Edge.ConditionExpression.TrimStartAndEnd().IsEmpty())
+        if (IsBlankConditionExpression(Edge.ConditionExpression))
         {
             FallbackEdge = &Edge;
             continue;
@@ -439,16 +471,43 @@ bool UDialogueRunner::FollowEdge(const FDialogueEdge& Edge)
     return MoveToNode(Edge.ToNodeGuid);
 }
 
+bool UDialogueRunner::EvaluateConditionExpression(const FString& Expression) const
+{
+    if (IsBlankConditionExpression(Expression))
+    {
+        return true;
+    }
+
+    const FString* CacheKey = &Expression;
+    FString TrimmedExpression;
+    if (FChar::IsWhitespace(Expression[0]) || FChar::IsWhitespace(Expression[Expression.Len() - 1]))
+    {
+        TrimmedExpression = Expression.TrimStartAndEnd();
+        CacheKey = &TrimmedExpression;
+    }
+
+    if (const bool* CachedResult = ConditionResultCache.Find(*CacheKey))
+    {
+        return *CachedResult;
+    }
+
+    bool bSuccess = false;
+    const bool bResult = UDialogueConditionEvaluator::EvaluateCondition(*CacheKey, VariableBank, bSuccess) && bSuccess;
+    if (bSuccess)
+    {
+        ConditionResultCache.Add(*CacheKey, bResult);
+    }
+    return bResult;
+}
+
 bool UDialogueRunner::EvaluateEdgeCondition(const FDialogueEdge& Edge) const
 {
-    bool bSuccess = false;
-    return UDialogueConditionEvaluator::EvaluateCondition(Edge.ConditionExpression, VariableBank, bSuccess) && bSuccess;
+    return EvaluateConditionExpression(Edge.ConditionExpression);
 }
 
 bool UDialogueRunner::EvaluateChoiceCondition(const FDialogueChoice& Choice) const
 {
-    bool bSuccess = false;
-    return UDialogueConditionEvaluator::EvaluateCondition(Choice.VisibilityCondition, VariableBank, bSuccess) && bSuccess;
+    return EvaluateConditionExpression(Choice.VisibilityCondition);
 }
 
 bool UDialogueRunner::SelectConditionBranch(const FDialogueNode& Node, FDialogueEdge& OutEdge) const
@@ -458,13 +517,17 @@ bool UDialogueRunner::SelectConditionBranch(const FDialogueNode& Node, FDialogue
         return false;
     }
 
-    TArray<FDialogueEdge> Edges;
-    CurrentTree->GetOutgoingEdges(Node.NodeGuid, Edges);
+    const TArray<int32>* EdgeIndices = FindRuntimeOutgoingEdges(Node.NodeGuid);
+    if (!EdgeIndices)
+    {
+        return false;
+    }
 
     const FDialogueEdge* DefaultEdge = nullptr;
-    for (const FDialogueEdge& Edge : Edges)
+    for (const int32 EdgeIndex : *EdgeIndices)
     {
-        if (Edge.ConditionExpression.TrimStartAndEnd().IsEmpty())
+        const FDialogueEdge& Edge = CurrentTree->Edges[EdgeIndex];
+        if (IsBlankConditionExpression(Edge.ConditionExpression))
         {
             DefaultEdge = &Edge;
             continue;
@@ -483,9 +546,9 @@ bool UDialogueRunner::SelectConditionBranch(const FDialogueNode& Node, FDialogue
         return true;
     }
 
-    if (Edges.IsValidIndex(Node.DefaultOutputIndex))
+    if (EdgeIndices->IsValidIndex(Node.DefaultOutputIndex))
     {
-        OutEdge = Edges[Node.DefaultOutputIndex];
+        OutEdge = CurrentTree->Edges[(*EdgeIndices)[Node.DefaultOutputIndex]];
         return true;
     }
 
@@ -513,3 +576,66 @@ FString UDialogueRunner::MakeSeenHash(const FDialogueLine& Line) const
         *Line.LineID.ToString());
 }
 
+void UDialogueRunner::BuildRuntimeLookup()
+{
+    RuntimeNodeIndices.Reset();
+    RuntimeOutgoingEdgeIndices.Reset();
+
+    if (!CurrentTree)
+    {
+        return;
+    }
+
+    RuntimeNodeIndices.Reserve(CurrentTree->Nodes.Num());
+    for (int32 NodeIndex = 0; NodeIndex < CurrentTree->Nodes.Num(); ++NodeIndex)
+    {
+        RuntimeNodeIndices.Add(CurrentTree->Nodes[NodeIndex].NodeGuid, NodeIndex);
+    }
+
+    RuntimeOutgoingEdgeIndices.Reserve(CurrentTree->Edges.Num());
+    for (int32 EdgeIndex = 0; EdgeIndex < CurrentTree->Edges.Num(); ++EdgeIndex)
+    {
+        const FDialogueEdge& Edge = CurrentTree->Edges[EdgeIndex];
+        RuntimeOutgoingEdgeIndices.FindOrAdd(Edge.FromNodeGuid).Add(EdgeIndex);
+    }
+
+    for (TPair<FGuid, TArray<int32>>& EdgePair : RuntimeOutgoingEdgeIndices)
+    {
+        EdgePair.Value.Sort([this](const int32 LeftIndex, const int32 RightIndex)
+        {
+            const FDialogueEdge& Left = CurrentTree->Edges[LeftIndex];
+            const FDialogueEdge& Right = CurrentTree->Edges[RightIndex];
+            if (Left.FromSlotIndex == Right.FromSlotIndex)
+            {
+                return Left.ToSlotIndex < Right.ToSlotIndex;
+            }
+            return Left.FromSlotIndex < Right.FromSlotIndex;
+        });
+    }
+}
+
+void UDialogueRunner::ResetRuntimeLookup()
+{
+    RuntimeNodeIndices.Reset();
+    RuntimeOutgoingEdgeIndices.Reset();
+}
+
+const FDialogueNode* UDialogueRunner::FindRuntimeNode(const FGuid& NodeGuid) const
+{
+    if (!CurrentTree)
+    {
+        return nullptr;
+    }
+
+    if (const int32* NodeIndex = RuntimeNodeIndices.Find(NodeGuid))
+    {
+        return CurrentTree->Nodes.IsValidIndex(*NodeIndex) ? &CurrentTree->Nodes[*NodeIndex] : nullptr;
+    }
+
+    return CurrentTree->FindNode(NodeGuid);
+}
+
+const TArray<int32>* UDialogueRunner::FindRuntimeOutgoingEdges(const FGuid& NodeGuid) const
+{
+    return RuntimeOutgoingEdgeIndices.Find(NodeGuid);
+}
