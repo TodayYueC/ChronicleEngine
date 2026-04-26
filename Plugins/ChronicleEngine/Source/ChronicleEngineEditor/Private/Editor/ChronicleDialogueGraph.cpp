@@ -31,7 +31,7 @@ void UChronicleDialogueGraph::RebuildFromDialogueTree()
         UChronicleDialogueGraphNode* GraphNode = NewObject<UChronicleDialogueGraphNode>(this);
         GraphNode->SetFlags(RF_Transactional);
         GraphNode->CreateNewGuid();
-        GraphNode->InitializeFromDialogueNode(DialogueNode, GetOutputSlotCount(DialogueNode.NodeGuid));
+        GraphNode->InitializeFromDialogueNode(DialogueNode, GetOutputSlotCount(DialogueNode.NodeGuid), DialogueTree->HasBreakpoint(DialogueNode.NodeGuid));
         GraphNode->NodePosX = FMath::RoundToInt(DialogueNode.Position.X);
         GraphNode->NodePosY = FMath::RoundToInt(DialogueNode.Position.Y);
         GraphNode->AllocateDefaultPins();
@@ -78,6 +78,24 @@ UChronicleDialogueGraphNode* UChronicleDialogueGraph::FindDialogueGraphNode(cons
     }
 
     return nullptr;
+}
+
+UChronicleDialogueGraphNode* UChronicleDialogueGraph::AddDialogueNodeFromSchemaAction(EDialogueNodeType NodeType, FVector2D Position, FString& OutError)
+{
+    if (!DialogueTree)
+    {
+        OutError = TEXT("No dialogue tree is attached to the graph.");
+        return nullptr;
+    }
+
+    FGuid NewNodeGuid;
+    if (!UChronicleDialogueEditorLibrary::AddDialogueNode(DialogueTree, NodeType, Position, NewNodeGuid, OutError))
+    {
+        return nullptr;
+    }
+
+    RebuildFromDialogueTree();
+    return FindDialogueGraphNode(NewNodeGuid);
 }
 
 bool UChronicleDialogueGraph::AddDialogueEdgeFromPins(UEdGraphPin* SourcePin, UEdGraphPin* TargetPin, FString& OutError)

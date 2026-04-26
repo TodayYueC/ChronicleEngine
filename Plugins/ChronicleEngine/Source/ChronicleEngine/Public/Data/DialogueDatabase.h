@@ -45,7 +45,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Chronicle|Database")
     TSoftObjectPtr<UDataTable> VoiceTable;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Chronicle|Database|Editor")
+    FChronicleSoftLockMetadata EditorLock;
+
     UFUNCTION(BlueprintCallable, Category="Chronicle|Database")
     bool FindVariableDefinition(FGameplayTag VariableTag, FVariableDefinition& OutDefinition) const;
 };
-

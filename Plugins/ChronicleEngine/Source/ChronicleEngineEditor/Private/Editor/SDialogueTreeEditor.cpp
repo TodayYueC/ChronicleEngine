@@ -5,9 +5,13 @@
 #include "Editor/ChronicleDialogueEditorLibrary.h"
 #include "Editor/ChronicleDialogueGraph.h"
 #include "Editor/ChronicleDialogueGraphNode.h"
+#include "Editor/ChronicleDialogueNodeDetails.h"
 #include "EdGraph/EdGraph.h"
 #include "GraphEditor.h"
+#include "IDetailsView.h"
 #include "InputCoreTypes.h"
+#include "Modules/ModuleManager.h"
+#include "PropertyEditorModule.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
@@ -264,6 +268,16 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
     EdgeCondition.Reset();
     RebuildGraph();
 
+    NodeDetails = TStrongObjectPtr<UChronicleDialogueNodeDetails>(NewObject<UChronicleDialogueNodeDetails>(GetTransientPackage()));
+    FDetailsViewArgs DetailsViewArgs;
+    DetailsViewArgs.bHideSelectionTip = true;
+    DetailsViewArgs.bAllowSearch = true;
+    DetailsViewArgs.bShowOptions = false;
+    DetailsViewArgs.NameAreaSettings = FDetailsViewArgs::HideNameArea;
+    FPropertyEditorModule& PropertyEditorModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>(TEXT("PropertyEditor"));
+    NodeDetailsView = PropertyEditorModule.CreateDetailView(DetailsViewArgs);
+    NodeDetailsView->OnFinishedChangingProperties().AddSP(this, &SDialogueTreeEditor::HandleNodeDetailsChanged);
+
     ChildSlot
     [
         SNew(SVerticalBox)
@@ -417,6 +431,73 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
                     .Padding(0.0f, 8.0f, 0.0f, 2.0f)
                     [
                         SNew(STextBlock)
+                        .Text(LOCTEXT("LockTitle", "Soft Lock"))
+                        .Font(FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 2.0f)
+                    [
+                        SAssignNew(LockText, STextBlock)
+                        .AutoWrapText(true)
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 4.0f)
+                    [
+                        SNew(SHorizontalBox)
+
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        .Padding(0.0f, 0.0f, 4.0f, 0.0f)
+                        [
+                            SNew(SButton)
+                            .Text(LOCTEXT("AcquireLock", "Acquire"))
+                            .OnClicked(this, &SDialogueTreeEditor::HandleAcquireLockClicked)
+                        ]
+
+                        + SHorizontalBox::Slot()
+                        .AutoWidth()
+                        [
+                            SNew(SButton)
+                            .Text(LOCTEXT("ReleaseLock", "Release"))
+                            .OnClicked(this, &SDialogueTreeEditor::HandleReleaseLockClicked)
+                        ]
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 8.0f, 0.0f, 2.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT("DebuggerTitle", "PIE Debugger"))
+                        .Font(FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 2.0f)
+                    [
+                        SAssignNew(DebuggerText, STextBlock)
+                        .AutoWrapText(true)
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 4.0f)
+                    [
+                        SNew(SButton)
+                        .Text(LOCTEXT("ToggleBreakpoint", "Toggle Breakpoint"))
+                        .OnClicked(this, &SDialogueTreeEditor::HandleToggleBreakpointClicked)
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
+                    .Padding(0.0f, 8.0f, 0.0f, 2.0f)
+                    [
+                        SNew(STextBlock)
                         .Text(LOCTEXT("LinkAuthoringTitle", "Link Authoring"))
                         .Font(FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
                     ]
@@ -484,6 +565,22 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
 
                     + SVerticalBox::Slot()
                     .AutoHeight()
+                    .Padding(0.0f, 8.0f, 0.0f, 2.0f)
+                    [
+                        SNew(STextBlock)
+                        .Text(LOCTEXT("NodeDetailsTitle", "Selected Node Details"))
+                        .Font(FAppStyle::GetFontStyle("DetailsView.CategoryFontStyle"))
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .FillHeight(1.0f)
+                    .Padding(0.0f, 2.0f)
+                    [
+                        NodeDetailsView.ToSharedRef()
+                    ]
+
+                    + SVerticalBox::Slot()
+                    .AutoHeight()
                     .Padding(0.0f, 8.0f)
                     [
                         SAssignNew(ValidationText, STextBlock)
@@ -496,6 +593,8 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
 
     RefreshCanvas();
     RefreshInspector();
+    RefreshLockSummary();
+    RefreshDebuggerSummary();
     RefreshValidationSummary();
 }
 
@@ -571,11 +670,51 @@ FReply SDialogueTreeEditor::HandleCreateEdgeToSelectedClicked()
     return FReply::Handled();
 }
 
+FReply SDialogueTreeEditor::HandleAcquireLockClicked()
+{
+    if (DialogueTree.IsValid())
+    {
+        FChronicleSoftLockMetadata Lock;
+        FString Error;
+        UChronicleDialogueEditorLibrary::AcquireDialogueTreeLock(DialogueTree.Get(), TEXT("Editing in Chronicle Dialogue Tree Editor"), Lock, Error);
+    }
+
+    RefreshLockSummary();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleReleaseLockClicked()
+{
+    if (DialogueTree.IsValid())
+    {
+        FString Error;
+        UChronicleDialogueEditorLibrary::ReleaseDialogueTreeLock(DialogueTree.Get(), Error);
+    }
+
+    RefreshLockSummary();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleToggleBreakpointClicked()
+{
+    if (DialogueTree.IsValid() && SelectedNodeGuid.IsValid())
+    {
+        FString Error;
+        const bool bNewBreakpointState = !UChronicleDialogueEditorLibrary::IsDialogueNodeBreakpointSet(DialogueTree.Get(), SelectedNodeGuid);
+        UChronicleDialogueEditorLibrary::SetDialogueNodeBreakpoint(DialogueTree.Get(), SelectedNodeGuid, bNewBreakpointState, FString(), Error);
+        RefreshInspector();
+        RefreshDebuggerSummary();
+    }
+
+    return FReply::Handled();
+}
+
 FReply SDialogueTreeEditor::HandleNodeSelected(FGuid NodeGuid)
 {
     SelectedNodeGuid = NodeGuid;
     RefreshCanvas();
     RefreshInspector();
+    RefreshDebuggerSummary();
     return FReply::Handled();
 }
 
@@ -713,6 +852,25 @@ void SDialogueTreeEditor::HandleGraphSelectionChanged(const TSet<UObject*>& Sele
     }
 
     RefreshInspector();
+    RefreshDebuggerSummary();
+}
+
+void SDialogueTreeEditor::HandleNodeDetailsChanged(const FPropertyChangedEvent& PropertyChangedEvent)
+{
+    if (!NodeDetails.IsValid())
+    {
+        return;
+    }
+
+    FString Error;
+    if (NodeDetails->ApplyToNode(Error))
+    {
+        RebuildGraph();
+        RefreshCanvas();
+        RefreshInspector();
+        RefreshDebuggerSummary();
+        RefreshValidationSummary();
+    }
 }
 
 int32 SDialogueTreeEditor::GetEdgeSlotIndex() const
@@ -771,6 +929,59 @@ void SDialogueTreeEditor::RefreshInspector()
     }
 
     EdgeListHost->SetContent(BuildEdgeList());
+
+    if (NodeDetailsView.IsValid() && NodeDetails.IsValid())
+    {
+        if (DialogueTree.IsValid() && SelectedNodeGuid.IsValid())
+        {
+            NodeDetails->LoadFromNode(DialogueTree.Get(), SelectedNodeGuid);
+            NodeDetailsView->SetObject(NodeDetails.Get(), true);
+        }
+        else
+        {
+            NodeDetailsView->SetObject(nullptr, true);
+        }
+    }
+}
+
+void SDialogueTreeEditor::RefreshLockSummary()
+{
+    if (!LockText.IsValid())
+    {
+        return;
+    }
+
+    if (!DialogueTree.IsValid() || !DialogueTree->EditorLock.bLocked)
+    {
+        LockText->SetText(LOCTEXT("LockOpen", "Unlocked"));
+        return;
+    }
+
+    LockText->SetText(FText::Format(
+        LOCTEXT("LockSummary", "Locked by {0} on {1}\n{2}"),
+        FText::FromString(DialogueTree->EditorLock.OwnerUserName),
+        FText::FromString(DialogueTree->EditorLock.OwnerMachineName),
+        FText::FromString(DialogueTree->EditorLock.Note)));
+}
+
+void SDialogueTreeEditor::RefreshDebuggerSummary()
+{
+    if (!DebuggerText.IsValid())
+    {
+        return;
+    }
+
+    if (!DialogueTree.IsValid() || !SelectedNodeGuid.IsValid())
+    {
+        DebuggerText->SetText(LOCTEXT("DebuggerNoSelection", "No selected node."));
+        return;
+    }
+
+    const bool bBreakpointSet = UChronicleDialogueEditorLibrary::IsDialogueNodeBreakpointSet(DialogueTree.Get(), SelectedNodeGuid);
+    DebuggerText->SetText(FText::Format(
+        LOCTEXT("DebuggerSelection", "Selected: {0}\nBreakpoint: {1}"),
+        FText::FromString(GetShortGuid(SelectedNodeGuid)),
+        bBreakpointSet ? LOCTEXT("BreakpointOn", "on") : LOCTEXT("BreakpointOff", "off")));
 }
 
 void SDialogueTreeEditor::RefreshValidationSummary()

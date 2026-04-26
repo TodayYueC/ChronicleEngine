@@ -8,9 +8,12 @@
 class SGraphEditor;
 class UDialogueTree;
 class UChronicleDialogueGraph;
+class UChronicleDialogueNodeDetails;
+class IDetailsView;
 class SBox;
 class STextBlock;
 struct FEdGraphEditAction;
+struct FPropertyChangedEvent;
 
 struct FDialogueEdge;
 
@@ -29,6 +32,9 @@ private:
     FReply HandleSaveGraphLayoutClicked();
     FReply HandleUseSelectedAsLinkSourceClicked();
     FReply HandleCreateEdgeToSelectedClicked();
+    FReply HandleAcquireLockClicked();
+    FReply HandleReleaseLockClicked();
+    FReply HandleToggleBreakpointClicked();
     FReply HandleNodeSelected(FGuid NodeGuid);
     FReply HandleStartLinkClicked(FGuid NodeGuid);
     FReply HandleLinkHereClicked(FGuid TargetNodeGuid);
@@ -39,11 +45,14 @@ private:
     void HandleSearchTextChanged(const FText& InText);
     void HandleGraphChanged(const FEdGraphEditAction& Action);
     void HandleGraphSelectionChanged(const TSet<UObject*>& Selection);
+    void HandleNodeDetailsChanged(const FPropertyChangedEvent& PropertyChangedEvent);
     int32 GetEdgeSlotIndex() const;
     FText GetLinkStateText() const;
     void RebuildGraph();
     void RefreshCanvas();
     void RefreshInspector();
+    void RefreshLockSummary();
+    void RefreshDebuggerSummary();
     void RefreshValidationSummary();
     TSharedRef<SWidget> BuildCanvas();
     TSharedRef<SWidget> BuildNodeCard(const FDialogueNode& Node);
@@ -55,10 +64,14 @@ private:
 
     TWeakObjectPtr<UDialogueTree> DialogueTree;
     TStrongObjectPtr<UChronicleDialogueGraph> DialogueGraph;
+    TStrongObjectPtr<UChronicleDialogueNodeDetails> NodeDetails;
     TSharedPtr<SGraphEditor> GraphEditor;
+    TSharedPtr<IDetailsView> NodeDetailsView;
     FDelegateHandle GraphChangedHandle;
     TSharedPtr<SBox> CanvasHost;
     TSharedPtr<SBox> EdgeListHost;
+    TSharedPtr<STextBlock> LockText;
+    TSharedPtr<STextBlock> DebuggerText;
     TSharedPtr<STextBlock> ValidationText;
     FString SearchQuery;
     TArray<FGuid> VisibleNodeGuids;

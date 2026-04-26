@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/ChronicleTypes.h"
 #include "EdGraph/EdGraph.h"
 #include "ChronicleDialogueGraph.generated.h"
 
@@ -21,6 +22,7 @@ public:
     void SynchronizeNodePositionsToDialogueTree() const;
 
     UChronicleDialogueGraphNode* FindDialogueGraphNode(const FGuid& NodeGuid) const;
+    UChronicleDialogueGraphNode* AddDialogueNodeFromSchemaAction(EDialogueNodeType NodeType, FVector2D Position, FString& OutError);
     bool AddDialogueEdgeFromPins(UEdGraphPin* SourcePin, UEdGraphPin* TargetPin, FString& OutError);
     bool RemoveDialogueEdgeFromPins(UEdGraphPin* SourcePin, UEdGraphPin* TargetPin);
 

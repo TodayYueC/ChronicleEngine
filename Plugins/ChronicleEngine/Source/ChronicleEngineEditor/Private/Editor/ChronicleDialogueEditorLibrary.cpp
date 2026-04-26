@@ -1,8 +1,48 @@
 #include "Editor/ChronicleDialogueEditorLibrary.h"
 
+#include "Data/DialogueDatabase.h"
 #include "Data/DialogueTree.h"
+#include "HAL/PlatformProcess.h"
+#include "Runtime/DialogueRunner.h"
 
 #define LOCTEXT_NAMESPACE "ChronicleDialogueEditorLibrary"
+
+namespace
+{
+void FillCurrentUserLock(FChronicleSoftLockMetadata& Lock, const FString& Note)
+{
+    Lock.bLocked = true;
+    Lock.OwnerUserName = FPlatformProcess::UserName(false);
+    Lock.OwnerMachineName = FPlatformProcess::ComputerName();
+    Lock.SessionGuid = FGuid::NewGuid();
+    Lock.LockedAtUtc = FDateTime::UtcNow();
+    Lock.Note = Note;
+}
+
+bool IsLockedByOtherUser(const FChronicleSoftLockMetadata& Lock)
+{
+    if (!Lock.bLocked)
+    {
+        return false;
+    }
+
+    return !Lock.OwnerUserName.Equals(FPlatformProcess::UserName(false), ESearchCase::IgnoreCase)
+        || !Lock.OwnerMachineName.Equals(FPlatformProcess::ComputerName(), ESearchCase::IgnoreCase);
+}
+
+FText BuildNodeTitle(const FDialogueNode& Node)
+{
+    if (Node.NodeType == EDialogueNodeType::Speech && Node.Lines.Num() > 0)
+    {
+        return FText::Format(
+            LOCTEXT("DebuggerSpeechTitle", "{0}: {1}"),
+            UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(Node.NodeType),
+            Node.Lines[0].Text);
+    }
+
+    return UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(Node.NodeType);
+}
+}
 
 bool UChronicleDialogueEditorLibrary::AddDialogueNode(UDialogueTree* Tree, EDialogueNodeType NodeType, FVector2D Position, FGuid& OutNodeGuid, FString& OutError)
 {
@@ -197,6 +237,54 @@ bool UChronicleDialogueEditorLibrary::RemoveDialogueEdge(UDialogueTree* Tree, co
     return true;
 }
 
+bool UChronicleDialogueEditorLibrary::SetDialogueNodeBreakpoint(UDialogueTree* Tree, const FGuid& NodeGuid, bool bEnabled, const FString& Note, FString& OutError)
+{
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    if (!Tree->FindNode(NodeGuid))
+    {
+        OutError = TEXT("Node was not found in the dialogue tree.");
+        return false;
+    }
+
+    Tree->Modify();
+    FDialogueNodeEditorState& State = Tree->FindOrAddEditorState(NodeGuid);
+    State.bBreakpointEnabled = bEnabled;
+    State.BreakpointNote = Note;
+    Tree->MarkPackageDirty();
+
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::IsDialogueNodeBreakpointSet(UDialogueTree* Tree, const FGuid& NodeGuid)
+{
+    return Tree && Tree->HasBreakpoint(NodeGuid);
+}
+
+int32 UChronicleDialogueEditorLibrary::GetDialogueNodeBreakpoints(UDialogueTree* Tree, TArray<FGuid>& OutNodeGuids)
+{
+    OutNodeGuids.Reset();
+    if (!Tree)
+    {
+        return 0;
+    }
+
+    for (const FDialogueNodeEditorState& State : Tree->EditorStates)
+    {
+        if (State.bBreakpointEnabled && Tree->FindNode(State.NodeGuid))
+        {
+            OutNodeGuids.Add(State.NodeGuid);
+        }
+    }
+
+    return OutNodeGuids.Num();
+}
+
 int32 UChronicleDialogueEditorLibrary::SearchDialogueNodes(UDialogueTree* Tree, const FString& Query, TArray<FGuid>& OutNodeGuids)
 {
     OutNodeGuids.Reset();
@@ -277,6 +365,132 @@ FText UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(EDialogueNodeType 
     default:
         return LOCTEXT("UnknownNode", "Unknown");
     }
+}
+
+bool UChronicleDialogueEditorLibrary::CaptureDebuggerSnapshot(UDialogueRunner* Runner, FChronicleDialogueDebuggerSnapshot& OutSnapshot, FString& OutError)
+{
+    OutSnapshot = FChronicleDialogueDebuggerSnapshot();
+    if (!Runner)
+    {
+        OutError = TEXT("No dialogue runner supplied.");
+        return false;
+    }
+
+    UDialogueTree* CurrentTree = Runner->GetCurrentTree();
+    OutSnapshot.CurrentTree = CurrentTree;
+    OutSnapshot.CurrentTreeGuid = CurrentTree ? CurrentTree->TreeGuid : FGuid();
+    OutSnapshot.CurrentNodeGuid = Runner->GetCurrentNodeGuid();
+    OutSnapshot.RunnerState = Runner->GetRunnerState();
+
+    if (CurrentTree)
+    {
+        OutSnapshot.bNodeHasBreakpoint = CurrentTree->HasBreakpoint(OutSnapshot.CurrentNodeGuid);
+        if (const FDialogueNode* Node = CurrentTree->FindNode(OutSnapshot.CurrentNodeGuid))
+        {
+            OutSnapshot.NodeTitle = BuildNodeTitle(*Node);
+        }
+    }
+
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::AcquireDialogueTreeLock(UDialogueTree* Tree, const FString& Note, FChronicleSoftLockMetadata& OutLock, FString& OutError)
+{
+    OutLock = FChronicleSoftLockMetadata();
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    if (IsLockedByOtherUser(Tree->EditorLock))
+    {
+        OutError = FString::Printf(TEXT("Dialogue tree is locked by %s on %s."), *Tree->EditorLock.OwnerUserName, *Tree->EditorLock.OwnerMachineName);
+        return false;
+    }
+
+    Tree->Modify();
+    FillCurrentUserLock(Tree->EditorLock, Note);
+    Tree->MarkPackageDirty();
+    OutLock = Tree->EditorLock;
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::ReleaseDialogueTreeLock(UDialogueTree* Tree, FString& OutError)
+{
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    if (IsLockedByOtherUser(Tree->EditorLock))
+    {
+        OutError = FString::Printf(TEXT("Dialogue tree is locked by %s on %s."), *Tree->EditorLock.OwnerUserName, *Tree->EditorLock.OwnerMachineName);
+        return false;
+    }
+
+    Tree->Modify();
+    Tree->EditorLock = FChronicleSoftLockMetadata();
+    Tree->MarkPackageDirty();
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::IsDialogueTreeLockedByOtherUser(UDialogueTree* Tree)
+{
+    return Tree && IsLockedByOtherUser(Tree->EditorLock);
+}
+
+bool UChronicleDialogueEditorLibrary::AcquireDialogueDatabaseLock(UDialogueDatabase* Database, const FString& Note, FChronicleSoftLockMetadata& OutLock, FString& OutError)
+{
+    OutLock = FChronicleSoftLockMetadata();
+    if (!Database)
+    {
+        OutError = TEXT("No dialogue database supplied.");
+        return false;
+    }
+
+    if (IsLockedByOtherUser(Database->EditorLock))
+    {
+        OutError = FString::Printf(TEXT("Dialogue database is locked by %s on %s."), *Database->EditorLock.OwnerUserName, *Database->EditorLock.OwnerMachineName);
+        return false;
+    }
+
+    Database->Modify();
+    FillCurrentUserLock(Database->EditorLock, Note);
+    Database->MarkPackageDirty();
+    OutLock = Database->EditorLock;
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::ReleaseDialogueDatabaseLock(UDialogueDatabase* Database, FString& OutError)
+{
+    if (!Database)
+    {
+        OutError = TEXT("No dialogue database supplied.");
+        return false;
+    }
+
+    if (IsLockedByOtherUser(Database->EditorLock))
+    {
+        OutError = FString::Printf(TEXT("Dialogue database is locked by %s on %s."), *Database->EditorLock.OwnerUserName, *Database->EditorLock.OwnerMachineName);
+        return false;
+    }
+
+    Database->Modify();
+    Database->EditorLock = FChronicleSoftLockMetadata();
+    Database->MarkPackageDirty();
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::IsDialogueDatabaseLockedByOtherUser(UDialogueDatabase* Database)
+{
+    return Database && IsLockedByOtherUser(Database->EditorLock);
 }
 
 #undef LOCTEXT_NAMESPACE

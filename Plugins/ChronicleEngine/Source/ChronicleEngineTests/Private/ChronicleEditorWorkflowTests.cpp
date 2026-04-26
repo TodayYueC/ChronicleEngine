@@ -1,10 +1,13 @@
 #include "Misc/AutomationTest.h"
 
 #include "Data/DialogueTree.h"
+#include "Data/DialogueDatabase.h"
 #include "Editor/ChronicleDialogueEditorLibrary.h"
 #include "Editor/ChronicleDialogueGraph.h"
 #include "Editor/ChronicleDialogueGraphNode.h"
 #include "Editor/ChronicleDialogueGraphSchema.h"
+#include "Editor/ChronicleDialogueNodeDetails.h"
+#include "Runtime/DialogueRunner.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleEditorAddNodeTest, "Chronicle.Editor.TreeEditor.AddNodeAndSearch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FChronicleEditorAddNodeTest::RunTest(const FString& Parameters)
@@ -157,6 +160,117 @@ bool FChronicleEditorGraphSchemaTest::RunTest(const FString& Parameters)
     Schema->BreakSinglePinLink(RootOutputPin, SpeechInputPin);
     TestEqual(TEXT("Dialogue edge removed when pin link breaks"), Tree->Edges.Num(), 0);
     TestFalse(TEXT("Graph pins are unlinked"), RootOutputPin->LinkedTo.Contains(SpeechInputPin));
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleEditorGraphContextActionsTest, "Chronicle.Editor.Graph.ContextActions", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleEditorGraphContextActionsTest::RunTest(const FString& Parameters)
+{
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+
+    UChronicleDialogueGraph* Graph = NewObject<UChronicleDialogueGraph>();
+    Graph->Initialize(Tree);
+
+    const UChronicleDialogueGraphSchema* Schema = Cast<UChronicleDialogueGraphSchema>(Graph->GetSchema());
+    TestNotNull(TEXT("Chronicle graph schema exists"), Schema);
+    if (!Schema)
+    {
+        return false;
+    }
+
+    TArray<EDialogueNodeType> SupportedNodeTypes;
+    UChronicleDialogueGraphSchema::GetSupportedContextNodeTypes(SupportedNodeTypes);
+    TestTrue(TEXT("Context menu supports M3 node actions"), SupportedNodeTypes.Num() >= 5);
+    TestTrue(TEXT("Context menu supports Speech nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Speech));
+    TestTrue(TEXT("Context menu supports Choice nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Choice));
+    TestTrue(TEXT("Context menu supports Condition nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Condition));
+
+    FString Error;
+    UEdGraphNode* CreatedNode = Graph->AddDialogueNodeFromSchemaAction(SupportedNodeTypes[0], FVector2D(88.0f, 144.0f), Error);
+    TestNotNull(TEXT("Context action creates a graph node"), CreatedNode);
+    TestEqual(TEXT("Context action adds one dialogue node"), Tree->Nodes.Num(), 1);
+    TestEqual(TEXT("Created node position comes from context location"), Tree->Nodes[0].Position, FVector2D(88.0f, 144.0f));
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleEditorNodeDetailsTest, "Chronicle.Editor.TreeEditor.NodeDetails", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleEditorNodeDetailsTest::RunTest(const FString& Parameters)
+{
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+
+    FString Error;
+    FGuid SpeechGuid;
+    TestTrue(TEXT("Speech node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Speech, FVector2D::ZeroVector, SpeechGuid, Error));
+
+    UChronicleDialogueNodeDetails* Details = NewObject<UChronicleDialogueNodeDetails>();
+    Details->LoadFromNode(Tree, SpeechGuid);
+    Details->NodeType = EDialogueNodeType::Condition;
+    Details->ConditionExpression = TEXT("score >= 10");
+    Details->bBreakpointEnabled = true;
+    Details->BreakpointNote = TEXT("Inspect high score branch");
+
+    TestTrue(TEXT("Details object applies selected node edits"), Details->ApplyToNode(Error));
+    const FDialogueNode* EditedNode = Tree->FindNode(SpeechGuid);
+    TestNotNull(TEXT("Edited node still exists"), EditedNode);
+    if (EditedNode)
+    {
+        TestEqual(TEXT("Details changed node type"), EditedNode->NodeType, EDialogueNodeType::Condition);
+        TestEqual(TEXT("Details changed condition"), EditedNode->ConditionExpression, FString(TEXT("score >= 10")));
+    }
+
+    TestTrue(TEXT("Details applied breakpoint state"), UChronicleDialogueEditorLibrary::IsDialogueNodeBreakpointSet(Tree, SpeechGuid));
+    const FDialogueNodeEditorState* EditorState = Tree->FindEditorState(SpeechGuid);
+    TestNotNull(TEXT("Editor state exists"), EditorState);
+    if (EditorState)
+    {
+        TestEqual(TEXT("Breakpoint note persisted"), EditorState->BreakpointNote, FString(TEXT("Inspect high score branch")));
+    }
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleEditorDebuggerAndLockTest, "Chronicle.Editor.DebuggerAndLock", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleEditorDebuggerAndLockTest::RunTest(const FString& Parameters)
+{
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+
+    FString Error;
+    FGuid RootGuid;
+    FGuid SpeechGuid;
+    TestTrue(TEXT("Root node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Root, FVector2D::ZeroVector, RootGuid, Error));
+    TestTrue(TEXT("Speech node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Speech, FVector2D(200.0f, 0.0f), SpeechGuid, Error));
+    FDialogueEdge Edge;
+    TestTrue(TEXT("Root can link to speech"), UChronicleDialogueEditorLibrary::AddDialogueEdge(Tree, RootGuid, SpeechGuid, 0, FString(), Edge, Error));
+    TestTrue(TEXT("Breakpoint can be enabled"), UChronicleDialogueEditorLibrary::SetDialogueNodeBreakpoint(Tree, SpeechGuid, true, TEXT("Stop here"), Error));
+
+    UDialogueRunner* Runner = NewObject<UDialogueRunner>();
+    Runner->Initialize(nullptr);
+    Runner->StartDialogue(Tree);
+
+    FChronicleDialogueDebuggerSnapshot Snapshot;
+    TestTrue(TEXT("Debugger snapshot can be captured"), UChronicleDialogueEditorLibrary::CaptureDebuggerSnapshot(Runner, Snapshot, Error));
+    TestEqual(TEXT("Snapshot points at the speech node"), Snapshot.CurrentNodeGuid, SpeechGuid);
+    TestEqual(TEXT("Snapshot records runner state"), Snapshot.RunnerState, EDialogueRunnerState::WaitingForInput);
+    TestTrue(TEXT("Snapshot sees node breakpoint"), Snapshot.bNodeHasBreakpoint);
+
+    FChronicleSoftLockMetadata TreeLock;
+    TestTrue(TEXT("Tree lock can be acquired"), UChronicleDialogueEditorLibrary::AcquireDialogueTreeLock(Tree, TEXT("Automation"), TreeLock, Error));
+    TestTrue(TEXT("Tree lock is marked locked"), Tree->EditorLock.bLocked);
+    TestFalse(TEXT("Current user lock is not treated as foreign"), UChronicleDialogueEditorLibrary::IsDialogueTreeLockedByOtherUser(Tree));
+    TestTrue(TEXT("Tree lock can be released"), UChronicleDialogueEditorLibrary::ReleaseDialogueTreeLock(Tree, Error));
+    TestFalse(TEXT("Tree lock released"), Tree->EditorLock.bLocked);
+
+    UDialogueDatabase* Database = NewObject<UDialogueDatabase>();
+    FChronicleSoftLockMetadata DatabaseLock;
+    TestTrue(TEXT("Database lock can be acquired"), UChronicleDialogueEditorLibrary::AcquireDialogueDatabaseLock(Database, TEXT("Automation"), DatabaseLock, Error));
+    TestTrue(TEXT("Database lock is marked locked"), Database->EditorLock.bLocked);
+    TestTrue(TEXT("Database lock can be released"), UChronicleDialogueEditorLibrary::ReleaseDialogueDatabaseLock(Database, Error));
+    TestFalse(TEXT("Database lock released"), Database->EditorLock.bLocked);
 
     return true;
 }

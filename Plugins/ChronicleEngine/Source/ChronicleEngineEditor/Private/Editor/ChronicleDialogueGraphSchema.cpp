@@ -1,5 +1,6 @@
 #include "Editor/ChronicleDialogueGraphSchema.h"
 
+#include "Editor/ChronicleDialogueEditorLibrary.h"
 #include "Editor/ChronicleDialogueGraph.h"
 #include "Editor/ChronicleDialogueGraphNode.h"
 
@@ -21,6 +22,72 @@ bool NormalizePins(UEdGraphPin*& SourcePin, UEdGraphPin*& TargetPin)
 
     return SourcePin->Direction == EGPD_Output && TargetPin->Direction == EGPD_Input;
 }
+
+struct FChronicleDialogueGraphSchemaAction_NewNode final : public FEdGraphSchemaAction
+{
+    EDialogueNodeType NodeType = EDialogueNodeType::Speech;
+
+    FChronicleDialogueGraphSchemaAction_NewNode()
+        : FEdGraphSchemaAction()
+    {
+    }
+
+    explicit FChronicleDialogueGraphSchemaAction_NewNode(EDialogueNodeType InNodeType)
+        : FEdGraphSchemaAction(
+            LOCTEXT("DialogueNodeCategory", "Dialogue Node"),
+            UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(InNodeType),
+            LOCTEXT("DialogueNodeTooltip", "Create a Chronicle dialogue node."),
+            0)
+        , NodeType(InNodeType)
+    {
+    }
+
+    virtual UEdGraphNode* PerformAction(UEdGraph* ParentGraph, UEdGraphPin* FromPin, const FVector2D Location, bool bSelectNewNode = true) override
+    {
+        UChronicleDialogueGraph* DialogueGraph = Cast<UChronicleDialogueGraph>(ParentGraph);
+        if (!DialogueGraph)
+        {
+            return nullptr;
+        }
+
+        FString Error;
+        UChronicleDialogueGraphNode* NewNode = DialogueGraph->AddDialogueNodeFromSchemaAction(NodeType, Location, Error);
+        if (FromPin && NewNode)
+        {
+            if (UEdGraphPin* InputPin = NewNode->GetInputPin())
+            {
+                const UEdGraphSchema* Schema = DialogueGraph->GetSchema();
+                if (Schema && FromPin->Direction == EGPD_Output)
+                {
+                    Schema->TryCreateConnection(FromPin, InputPin);
+                }
+            }
+        }
+
+        return NewNode;
+    }
+};
+}
+
+void UChronicleDialogueGraphSchema::GetSupportedContextNodeTypes(TArray<EDialogueNodeType>& OutNodeTypes)
+{
+    OutNodeTypes = {
+        EDialogueNodeType::Speech,
+        EDialogueNodeType::Choice,
+        EDialogueNodeType::Condition,
+        EDialogueNodeType::Event,
+        EDialogueNodeType::Wait
+    };
+}
+
+void UChronicleDialogueGraphSchema::GetGraphContextActions(FGraphContextMenuBuilder& ContextMenuBuilder) const
+{
+    TArray<EDialogueNodeType> NodeTypes;
+    GetSupportedContextNodeTypes(NodeTypes);
+    for (EDialogueNodeType NodeType : NodeTypes)
+    {
+        ContextMenuBuilder.AddAction(MakeShared<FChronicleDialogueGraphSchemaAction_NewNode>(NodeType));
+    }
 }
 
 const FPinConnectionResponse UChronicleDialogueGraphSchema::CanCreateConnection(const UEdGraphPin* A, const UEdGraphPin* B) const

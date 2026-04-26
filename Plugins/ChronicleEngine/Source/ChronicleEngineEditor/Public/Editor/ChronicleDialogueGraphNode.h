@@ -26,7 +26,10 @@ public:
     UPROPERTY()
     FString Summary;
 
-    void InitializeFromDialogueNode(const FDialogueNode& Node, int32 InOutputSlotCount);
+    UPROPERTY()
+    bool bBreakpointEnabled = false;
+
+    void InitializeFromDialogueNode(const FDialogueNode& Node, int32 InOutputSlotCount, bool bInBreakpointEnabled);
 
     virtual void AllocateDefaultPins() override;
     virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;

@@ -70,6 +70,40 @@ FDialogueNode* UDialogueTree::FindNodeMutable(const FGuid& NodeGuid)
     });
 }
 
+const FDialogueNodeEditorState* UDialogueTree::FindEditorState(const FGuid& NodeGuid) const
+{
+    return EditorStates.FindByPredicate([&NodeGuid](const FDialogueNodeEditorState& State)
+    {
+        return State.NodeGuid == NodeGuid;
+    });
+}
+
+FDialogueNodeEditorState* UDialogueTree::FindEditorStateMutable(const FGuid& NodeGuid)
+{
+    return EditorStates.FindByPredicate([&NodeGuid](const FDialogueNodeEditorState& State)
+    {
+        return State.NodeGuid == NodeGuid;
+    });
+}
+
+FDialogueNodeEditorState& UDialogueTree::FindOrAddEditorState(const FGuid& NodeGuid)
+{
+    if (FDialogueNodeEditorState* ExistingState = FindEditorStateMutable(NodeGuid))
+    {
+        return *ExistingState;
+    }
+
+    FDialogueNodeEditorState& NewState = EditorStates.AddDefaulted_GetRef();
+    NewState.NodeGuid = NodeGuid;
+    return NewState;
+}
+
+bool UDialogueTree::HasBreakpoint(const FGuid& NodeGuid) const
+{
+    const FDialogueNodeEditorState* State = FindEditorState(NodeGuid);
+    return State && State->bBreakpointEnabled;
+}
+
 void UDialogueTree::GetOutgoingEdges(const FGuid& NodeGuid, TArray<FDialogueEdge>& OutEdges) const
 {
     OutEdges.Reset();
@@ -143,7 +177,24 @@ void UDialogueTree::EnsureStableGuids()
             RootNodeGuid = RootNode->NodeGuid;
         }
     }
+
+    TSet<FGuid> ValidNodeGuids;
+    for (const FDialogueNode& Node : Nodes)
+    {
+        ValidNodeGuids.Add(Node.NodeGuid);
+    }
+
+    TSet<FGuid> SeenEditorStateGuids;
+    EditorStates.RemoveAll([&ValidNodeGuids, &SeenEditorStateGuids](const FDialogueNodeEditorState& State)
+    {
+        if (!State.NodeGuid.IsValid() || !ValidNodeGuids.Contains(State.NodeGuid) || SeenEditorStateGuids.Contains(State.NodeGuid))
+        {
+            return true;
+        }
+
+        SeenEditorStateGuids.Add(State.NodeGuid);
+        return false;
+    });
 }
 
 #undef LOCTEXT_NAMESPACE
-

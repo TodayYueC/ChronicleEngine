@@ -28,6 +28,12 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Chronicle|Tree")
     TArray<FVariableDefinition> Variables;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Chronicle|Tree|Editor")
+    TArray<FDialogueNodeEditorState> EditorStates;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Chronicle|Tree|Editor")
+    FChronicleSoftLockMetadata EditorLock;
+
     virtual void PostLoad() override;
 #if WITH_EDITOR
     virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -38,9 +44,12 @@ public:
 
     const FDialogueNode* FindNode(const FGuid& NodeGuid) const;
     FDialogueNode* FindNodeMutable(const FGuid& NodeGuid);
+    const FDialogueNodeEditorState* FindEditorState(const FGuid& NodeGuid) const;
+    FDialogueNodeEditorState* FindEditorStateMutable(const FGuid& NodeGuid);
+    FDialogueNodeEditorState& FindOrAddEditorState(const FGuid& NodeGuid);
+    bool HasBreakpoint(const FGuid& NodeGuid) const;
     void GetOutgoingEdges(const FGuid& NodeGuid, TArray<FDialogueEdge>& OutEdges) const;
     bool ResolveEntryNode(FName EntryNode, FGuid& OutNodeGuid) const;
 
     void EnsureStableGuids();
 };
-

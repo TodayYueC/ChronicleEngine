@@ -12,11 +12,12 @@ FName MakeOutputPinName(int32 SlotIndex)
 }
 }
 
-void UChronicleDialogueGraphNode::InitializeFromDialogueNode(const FDialogueNode& Node, int32 InOutputSlotCount)
+void UChronicleDialogueGraphNode::InitializeFromDialogueNode(const FDialogueNode& Node, int32 InOutputSlotCount, bool bInBreakpointEnabled)
 {
     DialogueNodeGuid = Node.NodeGuid;
     DialogueNodeType = Node.NodeType;
     OutputSlotCount = FMath::Max(1, InOutputSlotCount);
+    bBreakpointEnabled = bInBreakpointEnabled;
     DisplayTitle = UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(Node.NodeType);
 
     switch (Node.NodeType)
@@ -56,7 +57,7 @@ void UChronicleDialogueGraphNode::AllocateDefaultPins()
 FText UChronicleDialogueGraphNode::GetNodeTitle(ENodeTitleType::Type TitleType) const
 {
     return FText::Format(
-        LOCTEXT("NodeTitle", "{0}\n{1}"),
+        bBreakpointEnabled ? LOCTEXT("BreakpointNodeTitle", "[B] {0}\n{1}") : LOCTEXT("NodeTitle", "{0}\n{1}"),
         DisplayTitle.IsEmpty() ? LOCTEXT("DialogueNode", "Dialogue Node") : DisplayTitle,
         FText::FromString(Summary));
 }
@@ -85,7 +86,7 @@ FLinearColor UChronicleDialogueGraphNode::GetNodeTitleColor() const
 FText UChronicleDialogueGraphNode::GetTooltipText() const
 {
     return FText::Format(
-        LOCTEXT("NodeTooltip", "Chronicle Dialogue Node\nGUID: {0}"),
+        bBreakpointEnabled ? LOCTEXT("BreakpointNodeTooltip", "Chronicle Dialogue Node\nGUID: {0}\nBreakpoint enabled") : LOCTEXT("NodeTooltip", "Chronicle Dialogue Node\nGUID: {0}"),
         FText::FromString(DialogueNodeGuid.ToString(EGuidFormats::DigitsWithHyphens)));
 }
 

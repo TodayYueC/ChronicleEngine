@@ -10,7 +10,7 @@ This repository contains:
 
 ## Current Milestone
 
-M3 focuses on editor workflow around the runnable runtime and asset-pipeline foundation:
+M3 editor workflow is complete on top of the runnable runtime and asset-pipeline foundation:
 
 - dialogue data assets
 - variable storage
@@ -22,7 +22,7 @@ M3 focuses on editor workflow around the runnable runtime and asset-pipeline fou
 - CSV export/import for dialogue-line text handoff
 - structural validation for broken edges and unreachable nodes
 - custom Dialogue Tree asset editor foundation
-- native `SGraphEditor` dialogue graph with search selection, validation summary, basic node creation, position persistence, and edge create/delete controls
+- native `SGraphEditor` dialogue graph with search selection, validation summary, toolbar and context-menu node creation, position persistence, Details editing, breakpoints, soft locks, and edge create/delete controls
 - automation tests
 
 ## Build Baseline

@@ -249,6 +249,45 @@ struct CHRONICLEENGINE_API FDialogueEdge
 };
 
 USTRUCT(BlueprintType)
+struct CHRONICLEENGINE_API FDialogueNodeEditorState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Editor")
+    FGuid NodeGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Editor")
+    bool bBreakpointEnabled = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Editor")
+    FString BreakpointNote;
+};
+
+USTRUCT(BlueprintType)
+struct CHRONICLEENGINE_API FChronicleSoftLockMetadata
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Editor")
+    bool bLocked = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Editor")
+    FString OwnerUserName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Editor")
+    FString OwnerMachineName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Editor")
+    FGuid SessionGuid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Editor")
+    FDateTime LockedAtUtc;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Editor")
+    FString Note;
+};
+
+USTRUCT(BlueprintType)
 struct CHRONICLEENGINE_API FDialogueHistoryEntry
 {
     GENERATED_BODY()
@@ -316,4 +355,3 @@ struct CHRONICLEENGINE_API FDialogueSaveData
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Save")
     TArray<FString> SeenDialogueHashes;
 };
-

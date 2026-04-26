@@ -19,12 +19,13 @@ Status: current implementation pass.
 
 ## M3 Editor Experience
 
-Status: current implementation pass.
+Status: complete for the planned M3 scope.
 
 - Dialogue Tree assets open in a Chronicle custom asset editor instead of the default details-only view.
-- Added a native `SGraphEditor` view backed by Chronicle EdGraph/Node/Schema classes, with search selection, validation summary, basic Speech/Choice/Condition node creation, graph-position persistence, pin connection edge creation, pin break edge deletion, and conditional edge create/delete controls.
+- Added a native `SGraphEditor` view backed by Chronicle EdGraph/Node/Schema classes, with search selection, validation summary, toolbar and context-menu node creation, graph-position persistence, pin connection edge creation, pin break edge deletion, and conditional edge create/delete controls.
 - Added editor helper APIs for node creation, node movement, edge editing, node search, and node display names.
-- Remaining: Details panel customization, graph context menu actions, breakpoints, PIE debugger, and soft-lock metadata.
+- Added selected-node Details editing, breakpoint metadata, debugger snapshot support, and Dialogue Tree / Dialogue Database soft-lock metadata.
+- Remaining editor polish moves to M4/M5: richer presentation widgets, PIE debug UX polish, and release hardening.
 
 ## M4 Presentation
 
