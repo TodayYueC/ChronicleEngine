@@ -6,6 +6,9 @@
 #include "Runtime/DialogueTextParser.h"
 #include "Runtime/VariableBank.h"
 
+#include "GameplayTagsManager.h"
+#include "Runtime/Launch/Resources/Version.h"
+
 namespace
 {
 bool IsBlankConditionExpression(const FString& Expression)
@@ -19,6 +22,24 @@ bool IsBlankConditionExpression(const FString& Expression)
     }
 
     return true;
+}
+
+FDialogueReturnFrame PopReturnFrameNoShrink(TArray<FDialogueReturnFrame>& Stack)
+{
+#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 4)
+    return Stack.Pop(EAllowShrinking::No);
+#else
+    return Stack.Pop(false);
+#endif
+}
+
+void DropReturnFrameNoShrink(TArray<FDialogueReturnFrame>& Stack)
+{
+#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 4)
+    Stack.Pop(EAllowShrinking::No);
+#else
+    Stack.Pop(false);
+#endif
 }
 }
 
@@ -64,6 +85,7 @@ void UDialogueRunner::StartDialogue(UDialogueTree* Tree, FName EntryNode)
     PresentedChoiceSlots.Reset();
     History.Reset();
     MementoStack.Reset();
+    SubDialogueReturnStack.Reset();
     WaitingEventTag = FGameplayTag();
     ConditionResultCache.Reset();
     BuildRuntimeLookup();
@@ -71,6 +93,7 @@ void UDialogueRunner::StartDialogue(UDialogueTree* Tree, FName EntryNode)
     MementoStack.Reserve(50);
     SeenDialogueHashes.Reserve(64);
     PresentedChoiceSlots.Reserve(8);
+    SubDialogueReturnStack.Reserve(8);
 
     const TArray<FVariableDefinition> EmptyGlobalDefinitions;
     VariableBank->InitializeFromDefinitions(Database ? Database->GlobalVariables : EmptyGlobalDefinitions, Tree->Variables);
@@ -105,7 +128,7 @@ void UDialogueRunner::Advance()
         }
         else
         {
-            EndDialogue();
+            FinishCurrentBranch();
         }
         return;
     }
@@ -131,7 +154,7 @@ void UDialogueRunner::SelectChoice(int32 ChoiceIndex)
     }
     else
     {
-        EndDialogue();
+        FinishCurrentBranch();
     }
 }
 
@@ -143,6 +166,7 @@ void UDialogueRunner::EndDialogue()
     CurrentLineIndex = INDEX_NONE;
     WaitingEventTag = FGameplayTag();
     PresentedChoiceSlots.Reset();
+    SubDialogueReturnStack.Reset();
     ConditionResultCache.Reset();
     ResetRuntimeLookup();
     SetRunnerState(EDialogueRunnerState::Idle);
@@ -164,7 +188,7 @@ void UDialogueRunner::NotifyEventComplete(FGameplayTag EventTag)
     }
     else
     {
-        EndDialogue();
+        FinishCurrentBranch();
     }
 }
 
@@ -252,7 +276,7 @@ void UDialogueRunner::ProcessCurrentNode()
         const FDialogueNode* Node = FindRuntimeNode(CurrentNodeGuid);
         if (!Node)
         {
-            EndDialogue();
+            FinishCurrentBranch();
             return;
         }
 
@@ -262,7 +286,7 @@ void UDialogueRunner::ProcessCurrentNode()
         case EDialogueNodeType::Sequence:
             if (!FollowFirstEdge())
             {
-                EndDialogue();
+                FinishCurrentBranch();
                 return;
             }
             break;
@@ -272,7 +296,7 @@ void UDialogueRunner::ProcessCurrentNode()
             {
                 if (!FollowFirstEdge())
                 {
-                    EndDialogue();
+                    FinishCurrentBranch();
                     return;
                 }
                 break;
@@ -300,7 +324,7 @@ void UDialogueRunner::ProcessCurrentNode()
             {
                 if (!FollowFirstEdge())
                 {
-                    EndDialogue();
+                    FinishCurrentBranch();
                     return;
                 }
                 break;
@@ -310,7 +334,7 @@ void UDialogueRunner::ProcessCurrentNode()
             {
                 if (!FollowEdgeBySlot(PresentedChoiceSlots[0]))
                 {
-                    EndDialogue();
+                    FinishCurrentBranch();
                     return;
                 }
                 break;
@@ -327,7 +351,7 @@ void UDialogueRunner::ProcessCurrentNode()
             FDialogueEdge SelectedEdge;
             if (!SelectConditionBranch(*Node, SelectedEdge))
             {
-                EndDialogue();
+                FinishCurrentBranch();
                 return;
             }
             FollowEdge(SelectedEdge);
@@ -336,24 +360,14 @@ void UDialogueRunner::ProcessCurrentNode()
 
         case EDialogueNodeType::Event:
         {
-            FDialogueEventData EventData;
-            EventData.EventTag = Node->EventTag;
-            EventData.Payload = Node->EventPayload;
-            EventData.bAsync = Node->bEventIsAsync;
-            OnDialogueEvent.Broadcast(EventData);
-            ConditionResultCache.Reset();
-
-            if (Node->bEventIsAsync)
+            if (!BroadcastNodeEvent(*Node))
             {
-                WaitingEventTag = Node->EventTag;
-                SetRunnerState(EDialogueRunnerState::WaitingForEvent);
-                PushMemento();
                 return;
             }
 
             if (!FollowFirstEdge())
             {
-                EndDialogue();
+                FinishCurrentBranch();
                 return;
             }
             break;
@@ -364,17 +378,58 @@ void UDialogueRunner::ProcessCurrentNode()
             PushMemento();
             return;
 
+        case EDialogueNodeType::Random:
+        {
+            FDialogueEdge SelectedEdge;
+            if (!SelectRandomEdge(*Node, SelectedEdge))
+            {
+                FinishCurrentBranch();
+                return;
+            }
+            FollowEdge(SelectedEdge);
+            break;
+        }
+
+        case EDialogueNodeType::Jump:
+            if (!EnterJumpNode(*Node))
+            {
+                FinishCurrentBranch();
+                return;
+            }
+            break;
+
+        case EDialogueNodeType::SubDialogue:
+            if (!EnterSubDialogueNode(*Node))
+            {
+                FinishCurrentBranch();
+                return;
+            }
+            break;
+
+        case EDialogueNodeType::Camera:
+        case EDialogueNodeType::Animation:
+            if (!BroadcastNodeEvent(*Node))
+            {
+                return;
+            }
+            if (!FollowFirstEdge())
+            {
+                FinishCurrentBranch();
+                return;
+            }
+            break;
+
         default:
             if (!FollowFirstEdge())
             {
-                EndDialogue();
+                FinishCurrentBranch();
                 return;
             }
             break;
         }
     }
 
-    EndDialogue();
+    FinishCurrentBranch();
 }
 
 void UDialogueRunner::PresentCurrentLine()
@@ -387,7 +442,7 @@ void UDialogueRunner::PresentCurrentLine()
     const FDialogueNode* Node = FindRuntimeNode(CurrentNodeGuid);
     if (!Node || !Node->Lines.IsValidIndex(CurrentLineIndex))
     {
-        EndDialogue();
+        FinishCurrentBranch();
         return;
     }
 
@@ -412,6 +467,64 @@ void UDialogueRunner::PresentCurrentLine()
     PushMemento();
 }
 
+void UDialogueRunner::FinishCurrentBranch()
+{
+    if (TryReturnFromSubDialogue())
+    {
+        ProcessCurrentNode();
+        return;
+    }
+
+    EndDialogue();
+}
+
+bool UDialogueRunner::TryReturnFromSubDialogue()
+{
+    while (SubDialogueReturnStack.Num() > 0)
+    {
+        const FDialogueReturnFrame ReturnFrame = PopReturnFrameNoShrink(SubDialogueReturnStack);
+        if (!ReturnFrame.Tree || !ReturnFrame.ReturnNodeGuid.IsValid())
+        {
+            continue;
+        }
+
+        CurrentTree = ReturnFrame.Tree;
+        CurrentNodeGuid = ReturnFrame.ReturnNodeGuid;
+        CurrentLineIndex = INDEX_NONE;
+        PresentedChoiceSlots.Reset();
+        WaitingEventTag = FGameplayTag();
+        ConditionResultCache.Reset();
+        BuildRuntimeLookup();
+        SetRunnerState(EDialogueRunnerState::Running);
+        return true;
+    }
+
+    return false;
+}
+
+bool UDialogueRunner::SwitchToTree(UDialogueTree* Tree, FName EntryNode)
+{
+    if (!Tree)
+    {
+        return false;
+    }
+
+    FGuid EntryGuid;
+    if (!Tree->ResolveEntryNode(EntryNode, EntryGuid))
+    {
+        return false;
+    }
+
+    CurrentTree = Tree;
+    CurrentNodeGuid = EntryGuid;
+    CurrentLineIndex = INDEX_NONE;
+    PresentedChoiceSlots.Reset();
+    WaitingEventTag = FGameplayTag();
+    ConditionResultCache.Reset();
+    BuildRuntimeLookup();
+    return true;
+}
+
 bool UDialogueRunner::MoveToNode(const FGuid& NodeGuid)
 {
     if (!CurrentTree || !FindRuntimeNode(NodeGuid))
@@ -430,6 +543,12 @@ bool UDialogueRunner::FollowFirstEdge()
 }
 
 bool UDialogueRunner::FollowEdgeBySlot(int32 SlotIndex)
+{
+    FDialogueEdge SelectedEdge;
+    return ResolveEdgeBySlot(SlotIndex, SelectedEdge) && FollowEdge(SelectedEdge);
+}
+
+bool UDialogueRunner::ResolveEdgeBySlot(int32 SlotIndex, FDialogueEdge& OutEdge) const
 {
     if (!CurrentTree)
     {
@@ -459,11 +578,18 @@ bool UDialogueRunner::FollowEdgeBySlot(int32 SlotIndex)
 
         if (EvaluateEdgeCondition(Edge))
         {
-            return FollowEdge(Edge);
+            OutEdge = Edge;
+            return true;
         }
     }
 
-    return FallbackEdge ? FollowEdge(*FallbackEdge) : false;
+    if (FallbackEdge)
+    {
+        OutEdge = *FallbackEdge;
+        return true;
+    }
+
+    return false;
 }
 
 bool UDialogueRunner::FollowEdge(const FDialogueEdge& Edge)
@@ -553,6 +679,165 @@ bool UDialogueRunner::SelectConditionBranch(const FDialogueNode& Node, FDialogue
     }
 
     return false;
+}
+
+bool UDialogueRunner::SelectRandomEdge(const FDialogueNode& Node, FDialogueEdge& OutEdge) const
+{
+    if (!CurrentTree)
+    {
+        return false;
+    }
+
+    const TArray<int32>* EdgeIndices = FindRuntimeOutgoingEdges(Node.NodeGuid);
+    if (!EdgeIndices)
+    {
+        return false;
+    }
+
+    TArray<const FDialogueEdge*> CandidateEdges;
+    float TotalWeight = 0.0f;
+    CandidateEdges.Reserve(EdgeIndices->Num());
+
+    for (const int32 EdgeIndex : *EdgeIndices)
+    {
+        const FDialogueEdge& Edge = CurrentTree->Edges[EdgeIndex];
+        if (!EvaluateEdgeCondition(Edge))
+        {
+            continue;
+        }
+
+        CandidateEdges.Add(&Edge);
+        TotalWeight += FMath::Max(0.0f, Edge.Weight);
+    }
+
+    if (CandidateEdges.Num() == 0)
+    {
+        return false;
+    }
+
+    if (TotalWeight <= UE_SMALL_NUMBER)
+    {
+        OutEdge = *CandidateEdges[0];
+        return true;
+    }
+
+    float Roll = FMath::FRandRange(0.0f, TotalWeight);
+    const FDialogueEdge* LastPositiveEdge = nullptr;
+    for (const FDialogueEdge* Edge : CandidateEdges)
+    {
+        const float EdgeWeight = FMath::Max(0.0f, Edge->Weight);
+        if (EdgeWeight <= UE_SMALL_NUMBER)
+        {
+            continue;
+        }
+
+        LastPositiveEdge = Edge;
+        Roll -= EdgeWeight;
+        if (Roll <= 0.0f)
+        {
+            OutEdge = *Edge;
+            return true;
+        }
+    }
+
+    OutEdge = LastPositiveEdge ? *LastPositiveEdge : *CandidateEdges.Last();
+    return true;
+}
+
+UDialogueTree* UDialogueRunner::ResolveTargetTree(const FDialogueNode& Node) const
+{
+    if (Node.TargetTree.IsNull())
+    {
+        return CurrentTree;
+    }
+
+    if (UDialogueTree* LoadedTree = Node.TargetTree.LoadSynchronous())
+    {
+        return LoadedTree;
+    }
+
+    return CurrentTree;
+}
+
+bool UDialogueRunner::EnterJumpNode(const FDialogueNode& Node)
+{
+    UDialogueTree* TargetTree = ResolveTargetTree(Node);
+    if (!TargetTree)
+    {
+        return false;
+    }
+
+    if (!Node.TargetEntryNode.IsNone() || TargetTree != CurrentTree)
+    {
+        return SwitchToTree(TargetTree, Node.TargetEntryNode);
+    }
+
+    return FollowFirstEdge();
+}
+
+bool UDialogueRunner::EnterSubDialogueNode(const FDialogueNode& Node)
+{
+    UDialogueTree* TargetTree = ResolveTargetTree(Node);
+    if (!TargetTree || (Node.TargetEntryNode.IsNone() && TargetTree == CurrentTree))
+    {
+        return FollowFirstEdge();
+    }
+
+    FDialogueEdge ReturnEdge;
+    const bool bHasReturnEdge = Node.bReturnToNextNodeOnSubDialogueEnd && ResolveEdgeBySlot(0, ReturnEdge);
+    if (bHasReturnEdge)
+    {
+        FDialogueReturnFrame& ReturnFrame = SubDialogueReturnStack.AddDefaulted_GetRef();
+        ReturnFrame.Tree = CurrentTree;
+        ReturnFrame.ReturnNodeGuid = ReturnEdge.ToNodeGuid;
+    }
+
+    if (SwitchToTree(TargetTree, Node.TargetEntryNode))
+    {
+        return true;
+    }
+
+    if (bHasReturnEdge)
+    {
+        DropReturnFrameNoShrink(SubDialogueReturnStack);
+    }
+
+    return false;
+}
+
+bool UDialogueRunner::BroadcastNodeEvent(const FDialogueNode& Node)
+{
+    FDialogueEventData EventData;
+    EventData.EventTag = Node.EventTag.IsValid() ? Node.EventTag : GetDefaultEventTagForNode(Node);
+    EventData.Payload = Node.EventPayload;
+    EventData.bAsync = Node.bEventIsAsync;
+    OnDialogueEvent.Broadcast(EventData);
+    ConditionResultCache.Reset();
+
+    if (!Node.bEventIsAsync)
+    {
+        return true;
+    }
+
+    WaitingEventTag = EventData.EventTag;
+    SetRunnerState(EDialogueRunnerState::WaitingForEvent);
+    PushMemento();
+    return false;
+}
+
+FGameplayTag UDialogueRunner::GetDefaultEventTagForNode(const FDialogueNode& Node) const
+{
+    switch (Node.NodeType)
+    {
+    case EDialogueNodeType::Camera:
+        return UGameplayTagsManager::Get().RequestGameplayTag(FName(TEXT("Chronicle.Camera.Cut")), false);
+
+    case EDialogueNodeType::Animation:
+        return UGameplayTagsManager::Get().RequestGameplayTag(FName(TEXT("Chronicle.Animation.Play")), false);
+
+    default:
+        return FGameplayTag();
+    }
 }
 
 void UDialogueRunner::PushMemento()

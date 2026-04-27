@@ -37,6 +37,9 @@ public:
     UPROPERTY()
     FDialogueEventData LastEvent;
 
+    UPROPERTY()
+    TArray<FDialogueEventData> EventHistory;
+
     UFUNCTION()
     void HandleDialogueStarted(UDialogueTree* Tree)
     {
@@ -68,5 +71,6 @@ public:
     {
         ++EventCount;
         LastEvent = EventData;
+        EventHistory.Add(EventData);
     }
 };

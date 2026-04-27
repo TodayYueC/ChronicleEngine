@@ -26,13 +26,14 @@ FGuid AddNode(UDialogueTree* Tree, EDialogueNodeType Type)
     return Node.NodeGuid;
 }
 
-void AddEdge(UDialogueTree* Tree, const FGuid& From, const FGuid& To, int32 Slot = 0, const FString& Condition = FString())
+void AddEdge(UDialogueTree* Tree, const FGuid& From, const FGuid& To, int32 Slot = 0, const FString& Condition = FString(), float Weight = 1.0f)
 {
     FDialogueEdge Edge;
     Edge.FromNodeGuid = From;
     Edge.ToNodeGuid = To;
     Edge.FromSlotIndex = Slot;
     Edge.ConditionExpression = Condition;
+    Edge.Weight = Weight;
     Tree->Edges.Add(Edge);
 }
 
@@ -292,6 +293,162 @@ bool FChronicleRunnerEventTest::RunTest(const FString& Parameters)
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleRunnerRandomWeightedTest, "Chronicle.Runtime.Runner.RandomWeighted", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleRunnerRandomWeightedTest::RunTest(const FString& Parameters)
+{
+    UChronicleTestListener* Listener = nullptr;
+    UDialogueRunner* Runner = ChronicleTests::MakeRunner(Listener);
+
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+    const FGuid RootGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Root);
+    const FGuid RandomGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Random);
+    const FGuid ZeroWeightGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    const FGuid WeightedGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    Tree->RootNodeGuid = RootGuid;
+
+    FDialogueLine ZeroWeightLine;
+    ZeroWeightLine.LineID = TEXT("ZeroWeight");
+    ZeroWeightLine.Text = FText::FromString(TEXT("zero"));
+    Tree->FindNodeMutable(ZeroWeightGuid)->Lines.Add(ZeroWeightLine);
+
+    FDialogueLine WeightedLine;
+    WeightedLine.LineID = TEXT("Weighted");
+    WeightedLine.Text = FText::FromString(TEXT("weighted"));
+    Tree->FindNodeMutable(WeightedGuid)->Lines.Add(WeightedLine);
+
+    ChronicleTests::AddEdge(Tree, RootGuid, RandomGuid);
+    ChronicleTests::AddEdge(Tree, RandomGuid, ZeroWeightGuid, 0, FString(), 0.0f);
+    ChronicleTests::AddEdge(Tree, RandomGuid, WeightedGuid, 1, FString(), 1.0f);
+
+    Runner->StartDialogue(Tree);
+
+    TestEqual(TEXT("Random node honors positive edge weights"), Listener->LastLine.Text.ToString(), FString(TEXT("weighted")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleRunnerJumpTest, "Chronicle.Runtime.Runner.Jump", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleRunnerJumpTest::RunTest(const FString& Parameters)
+{
+    UChronicleTestListener* Listener = nullptr;
+    UDialogueRunner* Runner = ChronicleTests::MakeRunner(Listener);
+
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+    const FGuid RootGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Root);
+    const FGuid JumpGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Jump);
+    const FGuid DecoyGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    const FGuid TargetGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    Tree->RootNodeGuid = RootGuid;
+
+    FDialogueNode* JumpNode = Tree->FindNodeMutable(JumpGuid);
+    JumpNode->TargetEntryNode = FName(TEXT("JumpTarget"));
+
+    FDialogueLine DecoyLine;
+    DecoyLine.LineID = TEXT("Decoy");
+    DecoyLine.Text = FText::FromString(TEXT("decoy"));
+    Tree->FindNodeMutable(DecoyGuid)->Lines.Add(DecoyLine);
+
+    FDialogueLine TargetLine;
+    TargetLine.LineID = TEXT("JumpTarget");
+    TargetLine.Text = FText::FromString(TEXT("target"));
+    Tree->FindNodeMutable(TargetGuid)->Lines.Add(TargetLine);
+
+    ChronicleTests::AddEdge(Tree, RootGuid, JumpGuid);
+    ChronicleTests::AddEdge(Tree, JumpGuid, DecoyGuid);
+
+    Runner->StartDialogue(Tree);
+
+    TestEqual(TEXT("Jump node resolves a target entry instead of the default edge"), Listener->LastLine.Text.ToString(), FString(TEXT("target")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleRunnerSubDialogueReturnTest, "Chronicle.Runtime.Runner.SubDialogueReturn", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleRunnerSubDialogueReturnTest::RunTest(const FString& Parameters)
+{
+    UChronicleTestListener* Listener = nullptr;
+    UDialogueRunner* Runner = ChronicleTests::MakeRunner(Listener);
+
+    UDialogueTree* MainTree = NewObject<UDialogueTree>();
+    MainTree->TreeGuid = FGuid::NewGuid();
+    const FGuid MainRootGuid = ChronicleTests::AddNode(MainTree, EDialogueNodeType::Root);
+    const FGuid SubDialogueGuid = ChronicleTests::AddNode(MainTree, EDialogueNodeType::SubDialogue);
+    const FGuid AfterGuid = ChronicleTests::AddNode(MainTree, EDialogueNodeType::Speech);
+    MainTree->RootNodeGuid = MainRootGuid;
+
+    UDialogueTree* SubTree = NewObject<UDialogueTree>();
+    SubTree->TreeGuid = FGuid::NewGuid();
+    const FGuid SubRootGuid = ChronicleTests::AddNode(SubTree, EDialogueNodeType::Root);
+    const FGuid SubLineGuid = ChronicleTests::AddNode(SubTree, EDialogueNodeType::Speech);
+    SubTree->RootNodeGuid = SubRootGuid;
+
+    FDialogueNode* SubDialogueNode = MainTree->FindNodeMutable(SubDialogueGuid);
+    SubDialogueNode->TargetTree = SubTree;
+
+    FDialogueLine SubLine;
+    SubLine.LineID = TEXT("SubLine");
+    SubLine.Text = FText::FromString(TEXT("inside sub"));
+    SubTree->FindNodeMutable(SubLineGuid)->Lines.Add(SubLine);
+
+    FDialogueLine AfterLine;
+    AfterLine.LineID = TEXT("AfterSub");
+    AfterLine.Text = FText::FromString(TEXT("after sub"));
+    MainTree->FindNodeMutable(AfterGuid)->Lines.Add(AfterLine);
+
+    ChronicleTests::AddEdge(MainTree, MainRootGuid, SubDialogueGuid);
+    ChronicleTests::AddEdge(MainTree, SubDialogueGuid, AfterGuid);
+    ChronicleTests::AddEdge(SubTree, SubRootGuid, SubLineGuid);
+
+    Runner->StartDialogue(MainTree);
+    TestEqual(TEXT("Sub-dialogue starts in the target tree"), Listener->LastLine.Text.ToString(), FString(TEXT("inside sub")));
+
+    Runner->Advance();
+    TestEqual(TEXT("Sub-dialogue returns to the calling tree"), Listener->LastLine.Text.ToString(), FString(TEXT("after sub")));
+    TestTrue(TEXT("Runner is back on the main tree after return"), Runner->GetCurrentTree() == MainTree);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleRunnerCameraAnimationEventTest, "Chronicle.Runtime.Runner.CameraAnimationEvents", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleRunnerCameraAnimationEventTest::RunTest(const FString& Parameters)
+{
+    UChronicleTestListener* Listener = nullptr;
+    UDialogueRunner* Runner = ChronicleTests::MakeRunner(Listener);
+
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+    const FGuid RootGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Root);
+    const FGuid CameraGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Camera);
+    const FGuid AnimationGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Animation);
+    const FGuid SpeechGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    Tree->RootNodeGuid = RootGuid;
+
+    Tree->FindNodeMutable(CameraGuid)->EventPayload.Add(TEXT("Shot"), TEXT("CloseUp"));
+    Tree->FindNodeMutable(AnimationGuid)->EventPayload.Add(TEXT("Montage"), TEXT("Nod"));
+
+    FDialogueLine Line;
+    Line.LineID = TEXT("AfterPresentationCue");
+    Line.Text = FText::FromString(TEXT("after cue"));
+    Tree->FindNodeMutable(SpeechGuid)->Lines.Add(Line);
+
+    ChronicleTests::AddEdge(Tree, RootGuid, CameraGuid);
+    ChronicleTests::AddEdge(Tree, CameraGuid, AnimationGuid);
+    ChronicleTests::AddEdge(Tree, AnimationGuid, SpeechGuid);
+
+    Runner->StartDialogue(Tree);
+
+    TestEqual(TEXT("Camera and animation nodes broadcast presentation events"), Listener->EventCount, 2);
+    if (Listener->EventHistory.Num() == 2)
+    {
+        TestEqual(TEXT("Camera node uses the default camera cue"), Listener->EventHistory[0].EventTag, ChronicleTests::Tag(TEXT("Chronicle.Camera.Cut")));
+        TestEqual(TEXT("Animation node uses the default animation cue"), Listener->EventHistory[1].EventTag, ChronicleTests::Tag(TEXT("Chronicle.Animation.Play")));
+        TestEqual(TEXT("Animation payload round-trips"), Listener->EventHistory[1].Payload.FindRef(TEXT("Montage")), FString(TEXT("Nod")));
+    }
+    TestEqual(TEXT("Presentation cue nodes continue to speech"), Listener->LastLine.Text.ToString(), FString(TEXT("after cue")));
+
+    return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleRunnerSaveRollbackTest, "Chronicle.Runtime.Runner.SaveRollback", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FChronicleRunnerSaveRollbackTest::RunTest(const FString& Parameters)
 {
@@ -452,6 +609,9 @@ bool FChronicleRunnerPerformanceTest::RunTest(const FString& Parameters)
     FinalLine.LineID = TEXT("PerfEnd");
     FinalLine.Text = FText::FromString(TEXT("done"));
     Tree->FindNodeMutable(PreviousGuid)->Lines.Add(FinalLine);
+
+    Runner->StartDialogue(Tree);
+    Runner->EndDialogue();
 
     const double StartSeconds = FPlatformTime::Seconds();
     Runner->StartDialogue(Tree);

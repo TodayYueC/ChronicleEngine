@@ -44,9 +44,12 @@ Status: complete for the planned source-first M4 scope.
 Status: current release-candidate hardening pass.
 
 - Runtime traversal now uses per-run node and outgoing-edge lookup tables.
+- Runtime traversal now includes explicit Random, Jump, SubDialogue, Camera, and Animation node behavior.
+- SubDialogue nodes support target-tree entry and return-to-caller flow.
+- Camera and Animation nodes emit presentation events with default cue tags.
 - Condition expressions compile once into a cached AST, with per-dialogue condition result caching and variable-name tag caching.
 - Rollback mementos are limited to player-visible pause points instead of internal node hops.
-- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.1181ms`.
+- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.0639ms` after warm-up.
 - Added release notes, release checklist, and a packaging script.
 - UE 5.7 smoke and UE 5.3 BuildPlugin packaging pass for this release-candidate pass.
 - Remaining before public release: optionally tag `v0.5.0` and attach the package to a GitHub Release.

@@ -16,6 +16,18 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnChronicleChoicesPresented, const 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnChronicleDialogueEvent, const FDialogueEventData&, EventData);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnChronicleRunnerStateChanged, EDialogueRunnerState, OldState, EDialogueRunnerState, NewState);
 
+USTRUCT()
+struct CHRONICLEENGINE_API FDialogueReturnFrame
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TObjectPtr<UDialogueTree> Tree;
+
+    UPROPERTY()
+    FGuid ReturnNodeGuid;
+};
+
 UCLASS(BlueprintType)
 class CHRONICLEENGINE_API UDialogueRunner : public UObject
 {
@@ -94,14 +106,24 @@ private:
     void SetRunnerState(EDialogueRunnerState NewState);
     void ProcessCurrentNode();
     void PresentCurrentLine();
+    void FinishCurrentBranch();
+    bool TryReturnFromSubDialogue();
+    bool SwitchToTree(UDialogueTree* Tree, FName EntryNode);
     bool MoveToNode(const FGuid& NodeGuid);
     bool FollowFirstEdge();
     bool FollowEdgeBySlot(int32 SlotIndex);
     bool FollowEdge(const FDialogueEdge& Edge);
+    bool ResolveEdgeBySlot(int32 SlotIndex, FDialogueEdge& OutEdge) const;
     bool EvaluateConditionExpression(const FString& Expression) const;
     bool EvaluateEdgeCondition(const FDialogueEdge& Edge) const;
     bool EvaluateChoiceCondition(const FDialogueChoice& Choice) const;
     bool SelectConditionBranch(const FDialogueNode& Node, FDialogueEdge& OutEdge) const;
+    bool SelectRandomEdge(const FDialogueNode& Node, FDialogueEdge& OutEdge) const;
+    UDialogueTree* ResolveTargetTree(const FDialogueNode& Node) const;
+    bool EnterJumpNode(const FDialogueNode& Node);
+    bool EnterSubDialogueNode(const FDialogueNode& Node);
+    bool BroadcastNodeEvent(const FDialogueNode& Node);
+    FGameplayTag GetDefaultEventTagForNode(const FDialogueNode& Node) const;
     void PushMemento();
     FString MakeSeenHash(const FDialogueLine& Line) const;
     void BuildRuntimeLookup();
@@ -141,6 +163,9 @@ private:
 
     UPROPERTY()
     TArray<int32> PresentedChoiceSlots;
+
+    UPROPERTY()
+    TArray<FDialogueReturnFrame> SubDialogueReturnStack;
 
     TMap<FGuid, int32> RuntimeNodeIndices;
     TMap<FGuid, TArray<int32>> RuntimeOutgoingEdgeIndices;

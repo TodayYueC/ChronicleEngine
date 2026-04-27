@@ -4,18 +4,21 @@ Chronicle Engine 0.5.0 is the M5 hardening pass for the UE5 JRPG dialogue plugin
 
 ## Highlights
 
+- Random, Jump, SubDialogue, Camera, and Animation nodes now have runtime behavior instead of falling back to generic first-edge traversal.
+- SubDialogue nodes can enter a target dialogue tree and return to the caller's next node when the sub-dialogue branch completes.
+- Camera and Animation nodes broadcast presentation events with default cue tags, so the existing presentation controller can route them like other dialogue events.
 - Runtime traversal now builds per-run node and outgoing-edge lookup tables instead of scanning arrays on every hop.
 - Condition expressions compile to a cached AST after first use.
 - Variable name to Gameplay Tag resolution is cached in `UVariableBank`.
 - Repeated condition results are cached during a dialogue run and invalidated when variables, save state, or events can change runtime state.
 - Rollback mementos are now stored at player-visible pause points instead of every internal node transition.
-- The 100-node condition traversal automation budget is tightened to `0.25ms`; the latest UE 5.3 editor automation run recorded `0.1181ms`.
+- The 100-node condition traversal automation budget is tightened to `0.25ms`; the latest UE 5.3 editor automation run recorded `0.0639ms` after warm-up.
 - Packaging is scripted with `Scripts/PackagePlugin.ps1`.
 
 ## Verification
 
 - UE 5.3 editor build: passed.
-- UE 5.3 `Chronicle` automation suite: 21 tests passed.
+- UE 5.3 `Chronicle` automation suite: 25 tests passed.
 - UE 5.7 editor build smoke: passed.
 - UE 5.3 `BuildPlugin` package: passed for Win64 Editor, Development Game, and Shipping Game targets.
 

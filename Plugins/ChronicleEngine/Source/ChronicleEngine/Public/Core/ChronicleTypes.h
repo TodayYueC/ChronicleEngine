@@ -2,7 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "UObject/SoftObjectPtr.h"
 #include "ChronicleTypes.generated.h"
+
+class UDialogueTree;
 
 UENUM(BlueprintType)
 enum class EChronicleVariableType : uint8
@@ -219,6 +222,15 @@ struct CHRONICLEENGINE_API FDialogueNode
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Node")
     int32 DefaultOutputIndex = INDEX_NONE;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Node")
+    TSoftObjectPtr<UDialogueTree> TargetTree;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Node")
+    FName TargetEntryNode;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Node")
+    bool bReturnToNextNodeOnSubDialogueEnd = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Chronicle|Node")
     bool bAutoSelectIfSingle = false;

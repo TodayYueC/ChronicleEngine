@@ -23,14 +23,14 @@ Chronicle Engine is an MIT-licensed Unreal Engine 5 plugin for JRPG-style dialog
 
 - Dialogue Tree / Dialogue Database / Speaker Profile 数据资产。
 - `UDialogueRunner` 运行时对话遍历。
-- Root、Speech、Choice、Condition、Event、Wait 节点。
+- Root、Speech、Choice、Condition、Event、Wait、Random、Jump、SubDialogue、Camera、Animation 节点。
 - 条件表达式、变量系统、保存加载、回滚。
 - JSON 导入导出、CSV 文本导入导出、结构校验。
 - 原生 Slate 图编辑器、节点搜索、断点、软锁、调试快照。
 - `UChronicleDialoguePresentationController` 表现层控制器。
 - `UChronicleDialogueWidget` UMG 基类。
 - Auto、Skip、Backlog、Rollback、Choice 转发。
-- Camera / Audio 表现 cue。
+- Camera / Animation / Audio 表现 cue。
 - 自动化测试和 BuildPlugin 打包。
 
 ## 2. 安装方式
@@ -72,10 +72,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 当前验证状态：
 
 - UE 5.3 编译通过。
-- UE 5.3 `Chronicle` 自动化测试 21/21 通过。
+- UE 5.3 `Chronicle` 自动化测试 25/25 通过。
 - UE 5.7 编译冒烟通过。
 - UE 5.3 BuildPlugin 打包通过。
-- 100 节点条件遍历测试预算：`0.25ms`。
+- 100 节点条件遍历测试预算：`0.25ms`；最新热路径实测 `0.0639ms`。
 
 ## 4. 创建基础数据资产
 
@@ -96,6 +96,11 @@ Dialogue Tree 用来保存具体对话节点和连接关系。
 - `Condition`：条件分支。
 - `Event`：向外部系统发送事件。
 - `Wait`：等待输入或流程暂停。
+- `Random`：按权重选择一条可用输出边。
+- `Jump`：跳转到当前树或目标树中的入口节点。
+- `SubDialogue`：进入子对话树，并可在结束后返回调用节点的后续分支。
+- `Camera`：发送镜头表现 cue。
+- `Animation`：发送动画表现 cue。
 
 ### 创建 Speaker Profile
 
@@ -266,7 +271,7 @@ UChronicleDialoguePresentationController* Presentation = Subsystem->GetPresentat
 - 控制 Auto。
 - 控制 Skip。
 - 执行 Rollback。
-- 转发 Camera / Audio 事件。
+- 转发 Camera / Animation / Audio 事件。
 
 ### 创建 UMG Widget
 
@@ -333,12 +338,13 @@ Presentation->RequestRollback(1);
 
 Runner 只在玩家可见暂停点保存回滚快照，避免内部条件跳转造成大量无意义 memento。
 
-## 12. Camera / Audio Cue
+## 12. Camera / Animation / Audio Cue
 
 默认 cue tag：
 
 - `Chronicle.Camera.Cut`
 - `Chronicle.Camera.Blend`
+- `Chronicle.Animation.Play`
 - `Chronicle.Audio.PlayVoice`
 - `Chronicle.Audio.StopVoice`
 
@@ -455,14 +461,14 @@ Main features:
 
 - Dialogue Tree / Dialogue Database / Speaker Profile assets.
 - Runtime traversal through `UDialogueRunner`.
-- Root, Speech, Choice, Condition, Event, and Wait nodes.
+- Root, Speech, Choice, Condition, Event, Wait, Random, Jump, SubDialogue, Camera, and Animation nodes.
 - Variables, condition expressions, save/load, and rollback.
 - JSON import/export, CSV text import/export, and structure validation.
 - Native Slate graph editor, search, breakpoints, soft locks, and debug snapshots.
 - `UChronicleDialoguePresentationController` for UI-facing flow control.
 - `UChronicleDialogueWidget` as the default UMG base class.
 - Auto, Skip, Backlog, Rollback, and Choice forwarding.
-- Camera / Audio presentation cues.
+- Camera / Animation / Audio presentation cues.
 - Automation tests and BuildPlugin packaging.
 
 ## 2. Installation
@@ -504,10 +510,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 Current verification status:
 
 - UE 5.3 build passes.
-- UE 5.3 `Chronicle` automation tests pass: 21/21.
+- UE 5.3 `Chronicle` automation tests pass: 25/25.
 - UE 5.7 build smoke passes.
 - UE 5.3 BuildPlugin packaging passes.
-- 100-node condition traversal budget: `0.25ms`.
+- 100-node condition traversal budget: `0.25ms`; latest warm-path run: `0.0639ms`.
 
 ## 4. Create Core Assets
 
@@ -528,6 +534,11 @@ Common node types:
 - `Condition`: branching logic.
 - `Event`: sends events to external systems.
 - `Wait`: pauses the flow or waits for input.
+- `Random`: chooses a valid outgoing edge by weight.
+- `Jump`: moves to a target entry in the current or target tree.
+- `SubDialogue`: enters another tree and can return to the caller.
+- `Camera`: broadcasts a camera presentation cue.
+- `Animation`: broadcasts an animation presentation cue.
 
 ### Create A Speaker Profile
 
@@ -698,7 +709,7 @@ The controller handles:
 - Auto mode
 - Skip mode
 - Rollback
-- Camera / Audio event forwarding
+- Camera / Animation / Audio event forwarding
 
 ### Create A UMG Widget
 
@@ -765,12 +776,13 @@ Presentation->RequestRollback(1);
 
 The runner stores rollback mementos only at player-visible pause points, not every internal condition hop.
 
-## 12. Camera / Audio Cues
+## 12. Camera / Animation / Audio Cues
 
 Default cue tags:
 
 - `Chronicle.Camera.Cut`
 - `Chronicle.Camera.Blend`
+- `Chronicle.Animation.Play`
 - `Chronicle.Audio.PlayVoice`
 - `Chronicle.Audio.StopVoice`
 
