@@ -2,447 +2,10 @@
 
 Chronicle Engine is an MIT-licensed Unreal Engine 5 plugin for JRPG-style dialogue and narrative systems. It provides a runtime dialogue runner, asset import/export pipeline, native editor graph workflow, UMG presentation foundation, automated tests, and release packaging support.
 
-- Current release candidate: `v0.5.0`
+- Current development version: `v0.5.1-dev`
+- Latest packaged release: `v0.5.0`
 - Primary engine baseline: UE 5.3
 - Compatibility smoke target: UE 5.7
-
----
-
-# 中文使用教程
-
-## 1. 项目内容
-
-本仓库包含一个最小 UE 宿主项目和 Chronicle Engine 插件源码：
-
-- `ChronicleHost.uproject`：用于编译、测试和演示插件的最小宿主项目。
-- `Plugins/ChronicleEngine`：插件源码。
-- `Documentation/`：路线图、资产管线、编辑器、表现层和发布说明。
-- `Scripts/PackagePlugin.ps1`：本地打包脚本。
-
-插件主要能力：
-
-- Dialogue Tree / Dialogue Database / Speaker Profile 数据资产。
-- `UDialogueRunner` 运行时对话遍历。
-- Root、Speech、Choice、Condition、Event、Wait、Random、Jump、SubDialogue、Camera、Animation 节点。
-- 条件表达式、变量系统、保存加载、回滚。
-- JSON 导入导出、CSV 文本导入导出、结构校验。
-- 原生 Slate 图编辑器、节点搜索、断点、软锁、调试快照。
-- `UChronicleDialoguePresentationController` 表现层控制器。
-- `UChronicleDialogueWidget` UMG 基类。
-- Auto、Skip、Backlog、Rollback、Choice 转发。
-- Camera / Animation / Audio 表现 cue。
-- 自动化测试和 BuildPlugin 打包。
-
-## 2. 安装方式
-
-### 方式 A：使用 GitHub Release 包
-
-1. 从 GitHub Releases 下载 `ChronicleEngine-0.5.0-UE5.3.zip`。
-2. 解压后将 `ChronicleEngine` 文件夹复制到你的项目：
-
-```text
-YourProject/Plugins/ChronicleEngine
-```
-
-3. 重新生成项目文件。
-4. 打开 UE 项目，在 Plugins 面板确认 `Chronicle Engine` 已启用。
-5. 重启编辑器。
-
-### 方式 B：从源码仓库使用
-
-1. 克隆仓库。
-2. 用 UE 5.3 打开 `ChronicleHost.uproject`。
-3. 编译 `ChronicleHostEditor`。
-4. 在宿主项目中测试插件或把 `Plugins/ChronicleEngine` 复制到其他 UE 项目。
-
-## 3. 编译与测试
-
-UE 5.3 编译：
-
-```powershell
-R:\UE\UE_5.3\Engine\Build\BatchFiles\Build.bat ChronicleHostEditor Win64 Development -Project="R:\AI_Agent\Codex\JRPGtalking\ChronicleHost.uproject" -WaitMutex
-```
-
-运行自动化测试：
-
-```powershell
-R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGtalking\ChronicleHost.uproject" -Unattended -NullRHI -NoSplash -NoSound -ExecCmds="Automation RunTests Chronicle; Quit"
-```
-
-当前验证状态：
-
-- UE 5.3 编译通过。
-- UE 5.3 `Chronicle` 自动化测试 25/25 通过。
-- UE 5.7 编译冒烟通过。
-- UE 5.3 BuildPlugin 打包通过。
-- 100 节点条件遍历测试预算：`0.25ms`；最新热路径实测 `0.0639ms`。
-
-## 4. 创建基础数据资产
-
-### 创建 Dialogue Tree
-
-1. 在 Content Browser 中右键。
-2. 选择 Chronicle 相关资产类型。
-3. 创建 `Dialogue Tree`。
-4. 双击打开自定义 Dialogue Tree 编辑器。
-
-Dialogue Tree 用来保存具体对话节点和连接关系。
-
-常用节点：
-
-- `Root`：对话入口。
-- `Speech`：对白行。
-- `Choice`：玩家选项。
-- `Condition`：条件分支。
-- `Event`：向外部系统发送事件。
-- `Wait`：等待输入或流程暂停。
-- `Random`：按权重选择一条可用输出边。
-- `Jump`：跳转到当前树或目标树中的入口节点。
-- `SubDialogue`：进入子对话树，并可在结束后返回调用节点的后续分支。
-- `Camera`：发送镜头表现 cue。
-- `Animation`：发送动画表现 cue。
-
-### 创建 Speaker Profile
-
-Speaker Profile 用来描述说话人信息：
-
-- `SpeakerTag`
-- 显示名
-- 头像集合
-- 立绘集合
-- 语音表
-- 文本颜色
-- 默认位置
-
-### 创建 Dialogue Database
-
-Dialogue Database 用来集中管理：
-
-- Speaker Profiles
-- Dialogue Trees
-- 全局变量定义
-- 本地化设置
-- 语音表
-
-运行时可以通过 Dialogue Database 初始化变量和查找对话资源。
-
-## 5. 编辑 Dialogue Tree
-
-打开 Dialogue Tree 后，可以使用自定义图编辑器：
-
-- 右键创建节点。
-- 拖拽节点调整位置。
-- 连接 Pin 创建边。
-- 删除连接移除边。
-- 在 Details 面板编辑选中节点。
-- 使用搜索定位节点。
-- 使用校验面板检查坏边、缺失 Root、不可达节点等问题。
-- 给节点设置断点元数据。
-
-推荐基本流程：
-
-1. 创建 `Root` 节点。
-2. 从 `Root` 连接到第一个 `Speech`。
-3. 在 `Speech` 中添加一行或多行 `FDialogueLine`。
-4. 如果需要分支，连接到 `Choice`。
-5. 在 `Choice` 中添加多个 `FDialogueChoice`。
-6. 每个 Choice slot 连接到不同后续节点。
-7. 使用 Validation 检查结构。
-
-## 6. 条件表达式
-
-Condition 节点、边条件和 Choice 可见性都使用 Chronicle 条件表达式。
-
-支持内容：
-
-- 变量引用：`Chronicle.Variable.Score`
-- 布尔字面量：`true`、`false`
-- 数字：`10`、`3.14`
-- 字符串：`"Alice"`
-- 比较：`==`、`!=`、`>`、`>=`、`<`、`<=`
-- 布尔运算：`AND`、`OR`、`NOT`
-- 符号运算：`&&`、`||`、`!`
-- 括号：`( ... )`
-
-示例：
-
-```text
-(Chronicle.Variable.Score >= 50 AND Chronicle.Variable.Flag == true)
-```
-
-```text
-Chronicle.Variable.Name == "Alice" OR Chronicle.Variable.Score > 80
-```
-
-变量默认由 `UVariableBank` 管理。Runtime 支持 `Global`、`Local`、`External` 三种作用域。
-
-## 7. Runtime 接入
-
-Blueprint 和 C++ 都建议通过 `UChronicleDialogueSubsystem` 获取当前 Runner。
-
-C++ 示例：
-
-```cpp
-UChronicleDialogueSubsystem* Subsystem = GameInstance->GetSubsystem<UChronicleDialogueSubsystem>();
-UDialogueRunner* Runner = Subsystem->GetDialogueRunner();
-Runner->StartDialogue(DialogueTree);
-```
-
-常用 API：
-
-- `Initialize`
-- `StartDialogue`
-- `Advance`
-- `SelectChoice`
-- `EndDialogue`
-- `NotifyEventComplete`
-- `SetVariable`
-- `GetVariable`
-- `SaveState`
-- `LoadState`
-- `PerformRollback`
-
-常用事件：
-
-- `OnDialogueStarted`
-- `OnDialogueEnded`
-- `OnLineStarted`
-- `OnChoicesPresented`
-- `OnDialogueEvent`
-- `OnRunnerStateChanged`
-
-## 8. 变量读写
-
-设置变量：
-
-```cpp
-Runner->SetVariable(ScoreTag, FVariableValue::MakeInt(75));
-```
-
-读取变量：
-
-```cpp
-bool bFound = false;
-FVariableValue Value = Runner->GetVariable(ScoreTag, bFound);
-```
-
-蓝图中可以通过对应 BlueprintCallable 方法完成同样操作。
-
-## 9. Event 节点
-
-Event 节点用于把剧情事件传递给项目自己的系统，例如：
-
-- 镜头切换
-- 播放语音
-- 开启任务
-- 触发动画
-- 等待外部系统完成
-
-事件载荷结构：
-
-```cpp
-FGameplayTag EventTag;
-TMap<FName, FString> Payload;
-bool bAsync;
-```
-
-如果 `bAsync` 为 true，Runner 会进入 `WaitingForEvent`，外部系统完成后调用：
-
-```cpp
-Runner->NotifyEventComplete(EventTag);
-```
-
-## 10. UMG 表现层
-
-M4 之后推荐使用 `UChronicleDialoguePresentationController` 作为 UI 和 Runner 之间的中间层。
-
-获取控制器：
-
-```cpp
-UChronicleDialogueSubsystem* Subsystem = GameInstance->GetSubsystem<UChronicleDialogueSubsystem>();
-UChronicleDialoguePresentationController* Presentation = Subsystem->GetPresentationController();
-```
-
-控制器负责：
-
-- 转发当前对白行。
-- 转发可见选项。
-- 保存 UI backlog。
-- 控制 Auto。
-- 控制 Skip。
-- 执行 Rollback。
-- 转发 Camera / Animation / Audio 事件。
-
-### 创建 UMG Widget
-
-1. 创建 Widget Blueprint。
-2. 父类选择 `UChronicleDialogueWidget`。
-3. 在 Begin Play 或创建后调用 `BindPresentationController`。
-4. 实现这些 Blueprint 事件：
-
-- `On Dialogue Started`
-- `On Dialogue Ended`
-- `On Line Started`
-- `On Line Completed`
-- `On Choices Presented`
-- `On Choice Selected`
-- `On Waiting For Input`
-- `On Rollback`
-- `On Dialogue Event`
-- `Handle Inline Tag`
-
-按钮可以绑定：
-
-- `AdvanceDialogue`
-- `SelectDialogueChoice`
-- `SetAutoAdvanceEnabled`
-- `SetSkipModeEnabled`
-- `RequestRollback`
-
-## 11. Auto、Skip、Backlog、Rollback
-
-### Auto
-
-Auto 模式只会在 Runner 处于 `WaitingForInput` 时自动推进，不会自动选择 Choice。
-
-```cpp
-Presentation->SetAutoAdvanceEnabled(true, 1.5f);
-```
-
-### Skip
-
-Skip 模式会快速跳过 `WaitingForInput` 的对白，直到遇到：
-
-- Choice
-- Async Event
-- Dialogue End
-- `MaxSkipStepsPerTick`
-
-Skip 中显示的文本会使用 `ETextRevealMode::Instant`。
-
-### Backlog
-
-Presentation Controller 会保存 UI-facing backlog：
-
-```cpp
-TArray<FDialogueHistoryEntry> Backlog = Presentation->GetBacklog();
-```
-
-### Rollback
-
-回滚调用：
-
-```cpp
-Presentation->RequestRollback(1);
-```
-
-Runner 只在玩家可见暂停点保存回滚快照，避免内部条件跳转造成大量无意义 memento。
-
-## 12. Camera / Animation / Audio Cue
-
-默认 cue tag：
-
-- `Chronicle.Camera.Cut`
-- `Chronicle.Camera.Blend`
-- `Chronicle.Animation.Play`
-- `Chronicle.Audio.PlayVoice`
-- `Chronicle.Audio.StopVoice`
-
-项目可以监听 `OnDialogueEvent` 或 Presentation Controller 的 `OnPresentationEvent`，再把 payload 转发给自己的镜头、音频、任务或动画系统。
-
-对白语音也可以直接使用：
-
-```cpp
-FDialogueLine::VoiceID
-```
-
-## 13. JSON / CSV 工作流
-
-JSON 用于完整 Dialogue Tree 结构交换。CSV 用于文本、本地化和写作协作。
-
-典型用途：
-
-- 导出 JSON 做版本审查或外部工具处理。
-- 从 JSON 重新导入 Dialogue Tree。
-- 导出 CSV 给编剧或本地化人员。
-- 导入 CSV 更新对白文本。
-
-更多细节见：
-
-- `Documentation/AssetPipeline.md`
-
-## 14. 示例 Actor
-
-`AChronicleDialogueDemoActor` 会在运行时创建一个小型 demo tree，展示：
-
-- Camera cue
-- VoiceID
-- 多行对白
-- Choice
-- Presentation Controller 启动流程
-
-使用方式：
-
-1. 在关卡中放置 `AChronicleDialogueDemoActor`。
-2. 保持 `bStartOnBeginPlay = true`。
-3. 运行 PIE。
-4. 绑定自己的 `UChronicleDialogueWidget` 后即可显示 UI。
-
-## 15. 打包插件
-
-默认使用 UE 5.3：
-
-```powershell
-.\Scripts\PackagePlugin.ps1
-```
-
-指定 UE 版本：
-
-```powershell
-.\Scripts\PackagePlugin.ps1 -EngineRoot "R:\UE\UE_5.7" -PackageName "ChronicleEngine-0.5.0-UE5.7"
-```
-
-输出目录：
-
-```text
-Artifacts/
-```
-
-该目录被 git 忽略。
-
-## 16. 常见问题
-
-### 插件启用后编译失败
-
-确认 UE 版本为 5.3 或 5.7，并重新生成项目文件。
-
-### 找不到 Gameplay Tag
-
-确认 `Config/DefaultGameplayTags.ini` 中包含所需 tag，或在项目设置中添加对应 Gameplay Tags。
-
-### Choice 没显示
-
-检查 `VisibilityCondition`。空条件表示可见；表达式失败或变量不存在会导致不可见。
-
-### Async Event 后对话不继续
-
-外部系统必须调用：
-
-```cpp
-Runner->NotifyEventComplete(EventTag);
-```
-
-### UMG 没收到事件
-
-确认 Widget 已调用：
-
-```cpp
-BindPresentationController(PresentationController);
-```
-
-### Backlog 回滚后不一致
-
-通过 Presentation Controller 调用 `RequestRollback`，不要直接绕过表现层调用 Runner 回滚。
 
 ---
 
@@ -475,7 +38,7 @@ Main features:
 
 ### Option A: Use the GitHub Release Package
 
-1. Download `ChronicleEngine-0.5.0-UE5.3.zip` from GitHub Releases.
+1. Download `ChronicleEngine-0.5.0-UE5.3.zip` from GitHub Releases. This is the latest packaged release; use Option B for the newest `main` branch features.
 2. Extract it and copy the `ChronicleEngine` folder into your project:
 
 ```text
@@ -492,6 +55,7 @@ YourProject/Plugins/ChronicleEngine
 2. Open `ChronicleHost.uproject` with UE 5.3.
 3. Build `ChronicleHostEditor`.
 4. Test the plugin in the host project, or copy `Plugins/ChronicleEngine` into another UE project.
+5. Use this option for the latest development version, currently `v0.5.1-dev`.
 
 ## 3. Build And Test
 
@@ -881,6 +445,445 @@ BindPresentationController(PresentationController);
 ### Backlog is inconsistent after rollback
 
 Call `RequestRollback` on the Presentation Controller instead of bypassing it and calling the Runner directly.
+
+---
+
+# 中文使用教程
+
+## 1. 项目内容
+
+本仓库包含一个最小 UE 宿主项目和 Chronicle Engine 插件源码：
+
+- `ChronicleHost.uproject`：用于编译、测试和演示插件的最小宿主项目。
+- `Plugins/ChronicleEngine`：插件源码。
+- `Documentation/`：路线图、资产管线、编辑器、表现层和发布说明。
+- `Scripts/PackagePlugin.ps1`：本地打包脚本。
+
+插件主要能力：
+
+- Dialogue Tree / Dialogue Database / Speaker Profile 数据资产。
+- `UDialogueRunner` 运行时对话遍历。
+- Root、Speech、Choice、Condition、Event、Wait、Random、Jump、SubDialogue、Camera、Animation 节点。
+- 条件表达式、变量系统、保存加载、回滚。
+- JSON 导入导出、CSV 文本导入导出、结构校验。
+- 原生 Slate 图编辑器、节点搜索、断点、软锁、调试快照。
+- `UChronicleDialoguePresentationController` 表现层控制器。
+- `UChronicleDialogueWidget` UMG 基类。
+- Auto、Skip、Backlog、Rollback、Choice 转发。
+- Camera / Animation / Audio 表现 cue。
+- 自动化测试和 BuildPlugin 打包。
+
+## 2. 安装方式
+
+### 方式 A：使用 GitHub Release 包
+
+1. 从 GitHub Releases 下载 `ChronicleEngine-0.5.0-UE5.3.zip`。这是最新打包版本；如果需要 `main` 分支最新功能，请使用方式 B。
+2. 解压后将 `ChronicleEngine` 文件夹复制到你的项目：
+
+```text
+YourProject/Plugins/ChronicleEngine
+```
+
+3. 重新生成项目文件。
+4. 打开 UE 项目，在 Plugins 面板确认 `Chronicle Engine` 已启用。
+5. 重启编辑器。
+
+### 方式 B：从源码仓库使用
+
+1. 克隆仓库。
+2. 用 UE 5.3 打开 `ChronicleHost.uproject`。
+3. 编译 `ChronicleHostEditor`。
+4. 在宿主项目中测试插件或把 `Plugins/ChronicleEngine` 复制到其他 UE 项目。
+5. 如需最新开发版，请使用此方式；当前开发版为 `v0.5.1-dev`。
+
+## 3. 编译与测试
+
+UE 5.3 编译：
+
+```powershell
+R:\UE\UE_5.3\Engine\Build\BatchFiles\Build.bat ChronicleHostEditor Win64 Development -Project="R:\AI_Agent\Codex\JRPGtalking\ChronicleHost.uproject" -WaitMutex
+```
+
+运行自动化测试：
+
+```powershell
+R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGtalking\ChronicleHost.uproject" -Unattended -NullRHI -NoSplash -NoSound -ExecCmds="Automation RunTests Chronicle; Quit"
+```
+
+当前验证状态：
+
+- UE 5.3 编译通过。
+- UE 5.3 `Chronicle` 自动化测试 25/25 通过。
+- UE 5.7 编译冒烟通过。
+- UE 5.3 BuildPlugin 打包通过。
+- 100 节点条件遍历测试预算：`0.25ms`；最新热路径实测 `0.0639ms`。
+
+## 4. 创建基础数据资产
+
+### 创建 Dialogue Tree
+
+1. 在 Content Browser 中右键。
+2. 选择 Chronicle 相关资产类型。
+3. 创建 `Dialogue Tree`。
+4. 双击打开自定义 Dialogue Tree 编辑器。
+
+Dialogue Tree 用来保存具体对话节点和连接关系。
+
+常用节点：
+
+- `Root`：对话入口。
+- `Speech`：对白行。
+- `Choice`：玩家选项。
+- `Condition`：条件分支。
+- `Event`：向外部系统发送事件。
+- `Wait`：等待输入或流程暂停。
+- `Random`：按权重选择一条可用输出边。
+- `Jump`：跳转到当前树或目标树中的入口节点。
+- `SubDialogue`：进入子对话树，并可在结束后返回调用节点的后续分支。
+- `Camera`：发送镜头表现 cue。
+- `Animation`：发送动画表现 cue。
+
+### 创建 Speaker Profile
+
+Speaker Profile 用来描述说话人信息：
+
+- `SpeakerTag`
+- 显示名
+- 头像集合
+- 立绘集合
+- 语音表
+- 文本颜色
+- 默认位置
+
+### 创建 Dialogue Database
+
+Dialogue Database 用来集中管理：
+
+- Speaker Profiles
+- Dialogue Trees
+- 全局变量定义
+- 本地化设置
+- 语音表
+
+运行时可以通过 Dialogue Database 初始化变量和查找对话资源。
+
+## 5. 编辑 Dialogue Tree
+
+打开 Dialogue Tree 后，可以使用自定义图编辑器：
+
+- 右键创建节点。
+- 拖拽节点调整位置。
+- 连接 Pin 创建边。
+- 删除连接移除边。
+- 在 Details 面板编辑选中节点。
+- 使用搜索定位节点。
+- 使用校验面板检查坏边、缺失 Root、不可达节点等问题。
+- 给节点设置断点元数据。
+
+推荐基本流程：
+
+1. 创建 `Root` 节点。
+2. 从 `Root` 连接到第一个 `Speech`。
+3. 在 `Speech` 中添加一行或多行 `FDialogueLine`。
+4. 如果需要分支，连接到 `Choice`。
+5. 在 `Choice` 中添加多个 `FDialogueChoice`。
+6. 每个 Choice slot 连接到不同后续节点。
+7. 使用 Validation 检查结构。
+
+## 6. 条件表达式
+
+Condition 节点、边条件和 Choice 可见性都使用 Chronicle 条件表达式。
+
+支持内容：
+
+- 变量引用：`Chronicle.Variable.Score`
+- 布尔字面量：`true`、`false`
+- 数字：`10`、`3.14`
+- 字符串：`"Alice"`
+- 比较：`==`、`!=`、`>`、`>=`、`<`、`<=`
+- 布尔运算：`AND`、`OR`、`NOT`
+- 符号运算：`&&`、`||`、`!`
+- 括号：`( ... )`
+
+示例：
+
+```text
+(Chronicle.Variable.Score >= 50 AND Chronicle.Variable.Flag == true)
+```
+
+```text
+Chronicle.Variable.Name == "Alice" OR Chronicle.Variable.Score > 80
+```
+
+变量默认由 `UVariableBank` 管理。Runtime 支持 `Global`、`Local`、`External` 三种作用域。
+
+## 7. Runtime 接入
+
+Blueprint 和 C++ 都建议通过 `UChronicleDialogueSubsystem` 获取当前 Runner。
+
+C++ 示例：
+
+```cpp
+UChronicleDialogueSubsystem* Subsystem = GameInstance->GetSubsystem<UChronicleDialogueSubsystem>();
+UDialogueRunner* Runner = Subsystem->GetDialogueRunner();
+Runner->StartDialogue(DialogueTree);
+```
+
+常用 API：
+
+- `Initialize`
+- `StartDialogue`
+- `Advance`
+- `SelectChoice`
+- `EndDialogue`
+- `NotifyEventComplete`
+- `SetVariable`
+- `GetVariable`
+- `SaveState`
+- `LoadState`
+- `PerformRollback`
+
+常用事件：
+
+- `OnDialogueStarted`
+- `OnDialogueEnded`
+- `OnLineStarted`
+- `OnChoicesPresented`
+- `OnDialogueEvent`
+- `OnRunnerStateChanged`
+
+## 8. 变量读写
+
+设置变量：
+
+```cpp
+Runner->SetVariable(ScoreTag, FVariableValue::MakeInt(75));
+```
+
+读取变量：
+
+```cpp
+bool bFound = false;
+FVariableValue Value = Runner->GetVariable(ScoreTag, bFound);
+```
+
+蓝图中可以通过对应 BlueprintCallable 方法完成同样操作。
+
+## 9. Event 节点
+
+Event 节点用于把剧情事件传递给项目自己的系统，例如：
+
+- 镜头切换
+- 播放语音
+- 开启任务
+- 触发动画
+- 等待外部系统完成
+
+事件载荷结构：
+
+```cpp
+FGameplayTag EventTag;
+TMap<FName, FString> Payload;
+bool bAsync;
+```
+
+如果 `bAsync` 为 true，Runner 会进入 `WaitingForEvent`，外部系统完成后调用：
+
+```cpp
+Runner->NotifyEventComplete(EventTag);
+```
+
+## 10. UMG 表现层
+
+M4 之后推荐使用 `UChronicleDialoguePresentationController` 作为 UI 和 Runner 之间的中间层。
+
+获取控制器：
+
+```cpp
+UChronicleDialogueSubsystem* Subsystem = GameInstance->GetSubsystem<UChronicleDialogueSubsystem>();
+UChronicleDialoguePresentationController* Presentation = Subsystem->GetPresentationController();
+```
+
+控制器负责：
+
+- 转发当前对白行。
+- 转发可见选项。
+- 保存 UI backlog。
+- 控制 Auto。
+- 控制 Skip。
+- 执行 Rollback。
+- 转发 Camera / Animation / Audio 事件。
+
+### 创建 UMG Widget
+
+1. 创建 Widget Blueprint。
+2. 父类选择 `UChronicleDialogueWidget`。
+3. 在 Begin Play 或创建后调用 `BindPresentationController`。
+4. 实现这些 Blueprint 事件：
+
+- `On Dialogue Started`
+- `On Dialogue Ended`
+- `On Line Started`
+- `On Line Completed`
+- `On Choices Presented`
+- `On Choice Selected`
+- `On Waiting For Input`
+- `On Rollback`
+- `On Dialogue Event`
+- `Handle Inline Tag`
+
+按钮可以绑定：
+
+- `AdvanceDialogue`
+- `SelectDialogueChoice`
+- `SetAutoAdvanceEnabled`
+- `SetSkipModeEnabled`
+- `RequestRollback`
+
+## 11. Auto、Skip、Backlog、Rollback
+
+### Auto
+
+Auto 模式只会在 Runner 处于 `WaitingForInput` 时自动推进，不会自动选择 Choice。
+
+```cpp
+Presentation->SetAutoAdvanceEnabled(true, 1.5f);
+```
+
+### Skip
+
+Skip 模式会快速跳过 `WaitingForInput` 的对白，直到遇到：
+
+- Choice
+- Async Event
+- Dialogue End
+- `MaxSkipStepsPerTick`
+
+Skip 中显示的文本会使用 `ETextRevealMode::Instant`。
+
+### Backlog
+
+Presentation Controller 会保存 UI-facing backlog：
+
+```cpp
+TArray<FDialogueHistoryEntry> Backlog = Presentation->GetBacklog();
+```
+
+### Rollback
+
+回滚调用：
+
+```cpp
+Presentation->RequestRollback(1);
+```
+
+Runner 只在玩家可见暂停点保存回滚快照，避免内部条件跳转造成大量无意义 memento。
+
+## 12. Camera / Animation / Audio Cue
+
+默认 cue tag：
+
+- `Chronicle.Camera.Cut`
+- `Chronicle.Camera.Blend`
+- `Chronicle.Animation.Play`
+- `Chronicle.Audio.PlayVoice`
+- `Chronicle.Audio.StopVoice`
+
+项目可以监听 `OnDialogueEvent` 或 Presentation Controller 的 `OnPresentationEvent`，再把 payload 转发给自己的镜头、音频、任务或动画系统。
+
+对白语音也可以直接使用：
+
+```cpp
+FDialogueLine::VoiceID
+```
+
+## 13. JSON / CSV 工作流
+
+JSON 用于完整 Dialogue Tree 结构交换。CSV 用于文本、本地化和写作协作。
+
+典型用途：
+
+- 导出 JSON 做版本审查或外部工具处理。
+- 从 JSON 重新导入 Dialogue Tree。
+- 导出 CSV 给编剧或本地化人员。
+- 导入 CSV 更新对白文本。
+
+更多细节见：
+
+- `Documentation/AssetPipeline.md`
+
+## 14. 示例 Actor
+
+`AChronicleDialogueDemoActor` 会在运行时创建一个小型 demo tree，展示：
+
+- Camera cue
+- VoiceID
+- 多行对白
+- Choice
+- Presentation Controller 启动流程
+
+使用方式：
+
+1. 在关卡中放置 `AChronicleDialogueDemoActor`。
+2. 保持 `bStartOnBeginPlay = true`。
+3. 运行 PIE。
+4. 绑定自己的 `UChronicleDialogueWidget` 后即可显示 UI。
+
+## 15. 打包插件
+
+默认使用 UE 5.3：
+
+```powershell
+.\Scripts\PackagePlugin.ps1
+```
+
+指定 UE 版本：
+
+```powershell
+.\Scripts\PackagePlugin.ps1 -EngineRoot "R:\UE\UE_5.7" -PackageName "ChronicleEngine-0.5.0-UE5.7"
+```
+
+输出目录：
+
+```text
+Artifacts/
+```
+
+该目录被 git 忽略。
+
+## 16. 常见问题
+
+### 插件启用后编译失败
+
+确认 UE 版本为 5.3 或 5.7，并重新生成项目文件。
+
+### 找不到 Gameplay Tag
+
+确认 `Config/DefaultGameplayTags.ini` 中包含所需 tag，或在项目设置中添加对应 Gameplay Tags。
+
+### Choice 没显示
+
+检查 `VisibilityCondition`。空条件表示可见；表达式失败或变量不存在会导致不可见。
+
+### Async Event 后对话不继续
+
+外部系统必须调用：
+
+```cpp
+Runner->NotifyEventComplete(EventTag);
+```
+
+### UMG 没收到事件
+
+确认 Widget 已调用：
+
+```cpp
+BindPresentationController(PresentationController);
+```
+
+### Backlog 回滚后不一致
+
+通过 Presentation Controller 调用 `RequestRollback`，不要直接绕过表现层调用 Runner 回滚。
 
 ---
 
