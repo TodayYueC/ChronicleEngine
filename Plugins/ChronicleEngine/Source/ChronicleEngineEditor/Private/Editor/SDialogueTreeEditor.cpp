@@ -21,7 +21,6 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SConstraintCanvas.h"
-#include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/SLeafWidget.h"
 #include "Widgets/Text/STextBlock.h"
@@ -373,18 +372,11 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
                 .Padding(0.0f)
                 .BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
                 [
-                    SNew(SScrollBox)
-                    .Orientation(Orient_Horizontal)
-
-                    + SScrollBox::Slot()
+                    SNew(SBox)
+                    .MinDesiredWidth(900.0f)
+                    .MinDesiredHeight(600.0f)
                     [
-                        SNew(SScrollBox)
-                        .Orientation(Orient_Vertical)
-
-                        + SScrollBox::Slot()
-                        [
-                            SAssignNew(CanvasHost, SBox)
-                        ]
+                        SAssignNew(CanvasHost, SBox)
                     ]
                 ]
             ]
@@ -596,6 +588,11 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
     RefreshLockSummary();
     RefreshDebuggerSummary();
     RefreshValidationSummary();
+}
+
+FVector2D SDialogueTreeEditor::ComputeDesiredSize(float LayoutScaleMultiplier) const
+{
+    return FVector2D(1280.0f, 720.0f);
 }
 
 FReply SDialogueTreeEditor::HandleAddNodeClicked(EDialogueNodeType NodeType)

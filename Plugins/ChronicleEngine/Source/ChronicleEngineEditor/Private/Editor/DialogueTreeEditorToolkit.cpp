@@ -17,12 +17,13 @@ void FDialogueTreeEditorToolkit::Initialize(UDialogueTree* InDialogueTree, const
 {
     DialogueTree = InDialogueTree;
 
-    const TSharedRef<FTabManager::FLayout> StandaloneDefaultLayout = FTabManager::NewLayout("ChronicleDialogueTreeEditorLayout_v1")
+    const TSharedRef<FTabManager::FLayout> StandaloneDefaultLayout = FTabManager::NewLayout("ChronicleDialogueTreeEditorLayout_v2")
         ->AddArea(
             FTabManager::NewPrimaryArea()
             ->SetOrientation(Orient_Vertical)
             ->Split(
                 FTabManager::NewStack()
+                ->SetSizeCoefficient(1.0f)
                 ->AddTab(ChronicleDialogueTreeEditor::EditorTabId, ETabState::OpenedTab)
                 ->SetHideTabWell(true)
             )

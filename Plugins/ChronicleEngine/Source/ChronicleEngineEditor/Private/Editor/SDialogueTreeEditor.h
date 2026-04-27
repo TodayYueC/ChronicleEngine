@@ -2,13 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "Core/ChronicleTypes.h"
+#include "Editor/ChronicleDialogueGraph.h"
+#include "Editor/ChronicleDialogueNodeDetails.h"
 #include "UObject/StrongObjectPtr.h"
 #include "Widgets/SCompoundWidget.h"
 
 class SGraphEditor;
 class UDialogueTree;
-class UChronicleDialogueGraph;
-class UChronicleDialogueNodeDetails;
 class IDetailsView;
 class SBox;
 class STextBlock;
@@ -25,6 +25,7 @@ public:
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
+    virtual FVector2D ComputeDesiredSize(float LayoutScaleMultiplier) const override;
 
 private:
     FReply HandleAddNodeClicked(EDialogueNodeType NodeType);
