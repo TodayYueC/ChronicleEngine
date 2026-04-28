@@ -58,6 +58,15 @@ enum class EDialogueRunnerState : uint8
 };
 
 UENUM(BlueprintType)
+enum class EDialogueTriggerType : uint8
+{
+    Proximity,
+    Interact,
+    Auto,
+    Event
+};
+
+UENUM(BlueprintType)
 enum class ETextRevealMode : uint8
 {
     Typewriter,

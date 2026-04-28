@@ -2,6 +2,7 @@
 
 #include "Presentation/ChronicleDialoguePresentationController.h"
 #include "Runtime/DialogueRunner.h"
+#include "Runtime/DialogueTriggerManager.h"
 
 void UChronicleDialogueSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -10,15 +11,23 @@ void UChronicleDialogueSubsystem::Initialize(FSubsystemCollectionBase& Collectio
     DialogueRunner->Initialize(nullptr);
     PresentationController = NewObject<UChronicleDialoguePresentationController>(this, TEXT("ChroniclePresentationController"));
     PresentationController->BindRunner(DialogueRunner);
+    TriggerManager = NewObject<UDialogueTriggerManager>(this, TEXT("ChronicleTriggerManager"));
+    TriggerManager->Initialize(DialogueRunner, PresentationController);
 }
 
 void UChronicleDialogueSubsystem::Deinitialize()
 {
+    if (TriggerManager)
+    {
+        TriggerManager->Deinitialize();
+    }
+
     if (PresentationController)
     {
         PresentationController->UnbindRunner();
     }
 
+    TriggerManager = nullptr;
     PresentationController = nullptr;
     DialogueRunner = nullptr;
     Super::Deinitialize();
@@ -50,8 +59,20 @@ UChronicleDialoguePresentationController* UChronicleDialogueSubsystem::GetPresen
     return PresentationController;
 }
 
+UDialogueTriggerManager* UChronicleDialogueSubsystem::GetTriggerManager()
+{
+    if (!TriggerManager)
+    {
+        TriggerManager = NewObject<UDialogueTriggerManager>(this, TEXT("ChronicleTriggerManager"));
+        TriggerManager->Initialize(GetDialogueRunner(), GetPresentationController());
+    }
+
+    return TriggerManager;
+}
+
 void UChronicleDialogueSubsystem::InitializeDialogueDatabase(UDialogueDatabase* Database)
 {
     GetDialogueRunner()->Initialize(Database);
     GetPresentationController()->BindRunner(DialogueRunner);
+    GetTriggerManager()->Initialize(DialogueRunner, PresentationController);
 }

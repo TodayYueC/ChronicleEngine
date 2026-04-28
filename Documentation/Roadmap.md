@@ -47,9 +47,10 @@ Status: current release-candidate hardening pass.
 - Runtime traversal now includes explicit Random, Jump, SubDialogue, Camera, and Animation node behavior.
 - SubDialogue nodes support target-tree entry and return-to-caller flow.
 - Camera and Animation nodes emit presentation events with default cue tags.
+- Added `UDialogueTrigger` assets and `UDialogueTriggerManager` runtime activation flow with priority selection, condition checks, cooldowns, one-shot consumption, tag activation, and subsystem access.
 - Condition expressions compile once into a cached AST, with per-dialogue condition result caching and variable-name tag caching.
 - Rollback mementos are limited to player-visible pause points instead of internal node hops.
-- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.0639ms` after warm-up.
+- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.0483ms` after warm-up.
 - Added release notes, release checklist, and a packaging script.
 - UE 5.7 smoke and UE 5.3 BuildPlugin packaging pass for this release-candidate pass.
 - Remaining before public release: optionally tag `v0.5.0` and attach the package to a GitHub Release.

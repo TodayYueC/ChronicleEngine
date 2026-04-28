@@ -2,11 +2,13 @@
 
 #include "ChronicleTestListener.h"
 #include "Data/DialogueTree.h"
+#include "Data/DialogueTrigger.h"
 #include "GameplayTagsManager.h"
 #include "Presentation/ChronicleDialoguePresentationController.h"
 #include "Runtime/DialogueConditionEvaluator.h"
 #include "Runtime/DialogueRunner.h"
 #include "Runtime/DialogueTextParser.h"
+#include "Runtime/DialogueTriggerManager.h"
 #include "Runtime/VariableBank.h"
 #include "HAL/PlatformTime.h"
 
@@ -96,6 +98,16 @@ UDialogueRunner* MakeRunner(UChronicleTestListener*& OutListener)
     Runner->OnDialogueEvent.AddDynamic(OutListener, &UChronicleTestListener::HandleDialogueEvent);
 
     return Runner;
+}
+
+UDialogueTrigger* MakeTrigger(UDialogueTree* Tree, const TCHAR* TriggerTagName, EDialogueTriggerType TriggerType, int32 Priority = 0)
+{
+    UDialogueTrigger* Trigger = NewObject<UDialogueTrigger>();
+    Trigger->TriggerTag = Tag(TriggerTagName);
+    Trigger->TargetTree = Tree;
+    Trigger->TriggerType = TriggerType;
+    Trigger->Priority = Priority;
+    return Trigger;
 }
 }
 
@@ -445,6 +457,71 @@ bool FChronicleRunnerCameraAnimationEventTest::RunTest(const FString& Parameters
         TestEqual(TEXT("Animation payload round-trips"), Listener->EventHistory[1].Payload.FindRef(TEXT("Montage")), FString(TEXT("Nod")));
     }
     TestEqual(TEXT("Presentation cue nodes continue to speech"), Listener->LastLine.Text.ToString(), FString(TEXT("after cue")));
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleTriggerManagerPriorityTest, "Chronicle.Runtime.TriggerManager.PriorityConditionsOneShot", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleTriggerManagerPriorityTest::RunTest(const FString& Parameters)
+{
+    UChronicleTestListener* Listener = nullptr;
+    UDialogueRunner* Runner = ChronicleTests::MakeRunner(Listener);
+    Runner->SetVariable(ChronicleTests::Tag(TEXT("Chronicle.Variable.Score")), FVariableValue::MakeInt(10));
+
+    UDialogueTriggerManager* TriggerManager = NewObject<UDialogueTriggerManager>();
+    TriggerManager->Initialize(Runner, nullptr);
+    TriggerManager->OnTriggerActivated.AddDynamic(Listener, &UChronicleTestListener::HandleTriggerActivated);
+    TriggerManager->OnTriggerRejected.AddDynamic(Listener, &UChronicleTestListener::HandleTriggerRejected);
+
+    UDialogueTree* LowTree = ChronicleTests::MakeLinearTree(FText::FromString(TEXT("low priority")));
+    UDialogueTree* HighTree = ChronicleTests::MakeLinearTree(FText::FromString(TEXT("high priority")));
+
+    UDialogueTrigger* LowTrigger = ChronicleTests::MakeTrigger(LowTree, TEXT("Chronicle.Trigger.Low"), EDialogueTriggerType::Interact, 1);
+    UDialogueTrigger* HighTrigger = ChronicleTests::MakeTrigger(HighTree, TEXT("Chronicle.Trigger.High"), EDialogueTriggerType::Interact, 10);
+    HighTrigger->ActivationConditions.Add(TEXT("Chronicle.Variable.Score >= 5"));
+    HighTrigger->bOneShot = true;
+
+    TArray<UDialogueTrigger*> CandidateTriggers;
+    CandidateTriggers.Add(LowTrigger);
+    CandidateTriggers.Add(HighTrigger);
+
+    TestTrue(TEXT("Best trigger activates"), TriggerManager->TryActivateBestTrigger(CandidateTriggers, EDialogueTriggerType::Interact));
+    TestEqual(TEXT("Highest priority matching trigger wins"), Listener->LastLine.Text.ToString(), FString(TEXT("high priority")));
+    TestEqual(TEXT("Trigger activation delegate fired"), Listener->TriggerActivatedCount, 1);
+    TestEqual(TEXT("Activation payload carries trigger tag"), Listener->LastTriggerActivation.TriggerTag, ChronicleTests::Tag(TEXT("Chronicle.Trigger.High")));
+
+    Runner->Advance();
+    TestTrue(TEXT("One-shot trigger is consumed after dialogue ends"), TriggerManager->IsTriggerConsumed(ChronicleTests::Tag(TEXT("Chronicle.Trigger.High"))));
+    TestFalse(TEXT("Consumed one-shot trigger cannot reactivate"), TriggerManager->TryActivateTrigger(HighTrigger));
+    TestEqual(TEXT("Rejected delegate fired for consumed trigger"), Listener->TriggerRejectedCount, 1);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleTriggerManagerCooldownTest, "Chronicle.Runtime.TriggerManager.TagCooldown", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleTriggerManagerCooldownTest::RunTest(const FString& Parameters)
+{
+    UChronicleTestListener* Listener = nullptr;
+    UDialogueRunner* Runner = ChronicleTests::MakeRunner(Listener);
+
+    UDialogueTriggerManager* TriggerManager = NewObject<UDialogueTriggerManager>();
+    TriggerManager->Initialize(Runner, nullptr);
+    TriggerManager->OnTriggerActivated.AddDynamic(Listener, &UChronicleTestListener::HandleTriggerActivated);
+    TriggerManager->OnTriggerRejected.AddDynamic(Listener, &UChronicleTestListener::HandleTriggerRejected);
+
+    UDialogueTree* Tree = ChronicleTests::MakeLinearTree(FText::FromString(TEXT("cooldown")));
+    UDialogueTrigger* Trigger = ChronicleTests::MakeTrigger(Tree, TEXT("Chronicle.Trigger.Cooldown"), EDialogueTriggerType::Event, 0);
+    Trigger->CooldownTime = 60.0f;
+    TriggerManager->RegisterTrigger(Trigger);
+
+    TestEqual(TEXT("Trigger manager registered one trigger"), TriggerManager->GetRegisteredTriggerCount(), 1);
+    TestTrue(TEXT("Trigger activates by tag"), TriggerManager->TryActivateTriggerByTag(ChronicleTests::Tag(TEXT("Chronicle.Trigger.Cooldown"))));
+    TestEqual(TEXT("Tag activation starts target dialogue"), Listener->LastLine.Text.ToString(), FString(TEXT("cooldown")));
+
+    Runner->Advance();
+    TestFalse(TEXT("Cooldown prevents immediate reactivation"), TriggerManager->TryActivateTriggerByTag(ChronicleTests::Tag(TEXT("Chronicle.Trigger.Cooldown"))));
+    TestEqual(TEXT("Cooldown rejection delegate fired"), Listener->TriggerRejectedCount, 1);
+    TestTrue(TEXT("Cooldown rejection reason is populated"), !Listener->LastTriggerRejectReason.IsEmpty());
 
     return true;
 }

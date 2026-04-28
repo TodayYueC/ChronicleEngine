@@ -34,3 +34,12 @@ public:
     virtual UObject* FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn) override;
 };
 
+UCLASS()
+class UDialogueTriggerFactory : public UFactory
+{
+    GENERATED_BODY()
+
+public:
+    UDialogueTriggerFactory();
+    virtual UObject* FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn) override;
+};

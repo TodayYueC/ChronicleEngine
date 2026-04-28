@@ -6,6 +6,7 @@
 
 class UDialogueDatabase;
 class UDialogueRunner;
+class UDialogueTriggerManager;
 class UChronicleDialoguePresentationController;
 
 UCLASS()
@@ -24,6 +25,9 @@ public:
     UChronicleDialoguePresentationController* GetPresentationController();
 
     UFUNCTION(BlueprintCallable, Category="Chronicle|Dialogue")
+    UDialogueTriggerManager* GetTriggerManager();
+
+    UFUNCTION(BlueprintCallable, Category="Chronicle|Dialogue")
     void InitializeDialogueDatabase(UDialogueDatabase* Database);
 
 private:
@@ -32,4 +36,7 @@ private:
 
     UPROPERTY()
     TObjectPtr<UChronicleDialoguePresentationController> PresentationController;
+
+    UPROPERTY()
+    TObjectPtr<UDialogueTriggerManager> TriggerManager;
 };

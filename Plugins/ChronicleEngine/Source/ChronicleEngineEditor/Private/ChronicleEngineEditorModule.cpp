@@ -13,6 +13,7 @@ public:
         RegisterAssetTypeAction(AssetTools, MakeShared<FAssetTypeActions_DialogueTree>());
         RegisterAssetTypeAction(AssetTools, MakeShared<FAssetTypeActions_DialogueDatabase>());
         RegisterAssetTypeAction(AssetTools, MakeShared<FAssetTypeActions_SpeakerProfile>());
+        RegisterAssetTypeAction(AssetTools, MakeShared<FAssetTypeActions_DialogueTrigger>());
     }
 
     virtual void ShutdownModule() override

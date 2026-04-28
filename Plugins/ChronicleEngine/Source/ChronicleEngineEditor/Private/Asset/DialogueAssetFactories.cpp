@@ -2,6 +2,7 @@
 
 #include "Data/DialogueDatabase.h"
 #include "Data/DialogueTree.h"
+#include "Data/DialogueTrigger.h"
 #include "Data/SpeakerProfile.h"
 
 UDialogueTreeFactory::UDialogueTreeFactory()
@@ -49,3 +50,14 @@ UObject* USpeakerProfileFactory::FactoryCreateNew(UClass* Class, UObject* InPare
     return NewObject<USpeakerProfile>(InParent, Class, Name, Flags);
 }
 
+UDialogueTriggerFactory::UDialogueTriggerFactory()
+{
+    SupportedClass = UDialogueTrigger::StaticClass();
+    bCreateNew = true;
+    bEditAfterNew = true;
+}
+
+UObject* UDialogueTriggerFactory::FactoryCreateNew(UClass* Class, UObject* InParent, FName Name, EObjectFlags Flags, UObject* Context, FFeedbackContext* Warn)
+{
+    return NewObject<UDialogueTrigger>(InParent, Class, Name, Flags);
+}

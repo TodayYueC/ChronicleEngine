@@ -32,6 +32,7 @@ Main features:
 - `UChronicleDialogueWidget` as the default UMG base class.
 - Auto, Skip, Backlog, Rollback, and Choice forwarding.
 - Camera / Animation / Audio presentation cues.
+- Dialogue Trigger assets and `UDialogueTriggerManager` activation flow.
 - Automation tests and BuildPlugin packaging.
 
 ## 2. Installation
@@ -74,10 +75,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 Current verification status:
 
 - UE 5.3 build passes.
-- UE 5.3 `Chronicle` automation tests pass: 25/25.
+- UE 5.3 `Chronicle` automation tests pass: 27/27.
 - UE 5.7 build smoke passes.
 - UE 5.3 BuildPlugin packaging passes.
-- 100-node condition traversal budget: `0.25ms`; latest warm-path run: `0.0639ms`.
+- 100-node condition traversal budget: `0.25ms`; latest warm-path run: `0.0483ms`.
 
 ## 4. Create Core Assets
 
@@ -190,6 +191,13 @@ UDialogueRunner* Runner = Subsystem->GetDialogueRunner();
 Runner->StartDialogue(DialogueTree);
 ```
 
+Trigger Manager access:
+
+```cpp
+UDialogueTriggerManager* TriggerManager = Subsystem->GetTriggerManager();
+TriggerManager->TryActivateTriggerByTag(TriggerTag);
+```
+
 Common API:
 
 - `Initialize`
@@ -203,6 +211,11 @@ Common API:
 - `SaveState`
 - `LoadState`
 - `PerformRollback`
+- `GetTriggerManager`
+- `TryActivateTrigger`
+- `TryActivateTriggerByTag`
+- `TryActivateBestTrigger`
+- `EvaluateAutoTriggers`
 
 Common events:
 
@@ -212,6 +225,23 @@ Common events:
 - `OnChoicesPresented`
 - `OnDialogueEvent`
 - `OnRunnerStateChanged`
+- `OnTriggerActivated`
+- `OnTriggerRejected`
+
+### Dialogue Triggers
+
+Create a `Dialogue Trigger` asset when the same Dialogue Tree needs world or event-based activation. A trigger stores:
+
+- `TriggerTag`
+- `TargetTree`
+- `EntryNode`
+- `TriggerType`: `Proximity`, `Interact`, `Auto`, or `Event`
+- `ActivationConditions`
+- `CooldownTime`
+- `bOneShot`
+- `Priority`
+
+Register triggers with `UDialogueTriggerManager`, or activate a known trigger directly by Gameplay Tag. The manager evaluates conditions against the runner variable bank, blocks cooldown and consumed one-shot triggers, broadcasts `OnTriggerActivated`, then starts the target dialogue through the presentation controller when available.
 
 ## 8. Variables
 
@@ -471,6 +501,7 @@ Call `RequestRollback` on the Presentation Controller instead of bypassing it an
 - `UChronicleDialogueWidget` UMG 基类。
 - Auto、Skip、Backlog、Rollback、Choice 转发。
 - Camera / Animation / Audio 表现 cue。
+- Dialogue Trigger 资产和 `UDialogueTriggerManager` 激活流程。
 - 自动化测试和 BuildPlugin 打包。
 
 ## 2. 安装方式
@@ -513,10 +544,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 当前验证状态：
 
 - UE 5.3 编译通过。
-- UE 5.3 `Chronicle` 自动化测试 25/25 通过。
+- UE 5.3 `Chronicle` 自动化测试 27/27 通过。
 - UE 5.7 编译冒烟通过。
 - UE 5.3 BuildPlugin 打包通过。
-- 100 节点条件遍历测试预算：`0.25ms`；最新热路径实测 `0.0639ms`。
+- 100 节点条件遍历测试预算：`0.25ms`；最新热路径实测 `0.0483ms`。
 
 ## 4. 创建基础数据资产
 
@@ -629,6 +660,13 @@ UDialogueRunner* Runner = Subsystem->GetDialogueRunner();
 Runner->StartDialogue(DialogueTree);
 ```
 
+Trigger Manager 接入：
+
+```cpp
+UDialogueTriggerManager* TriggerManager = Subsystem->GetTriggerManager();
+TriggerManager->TryActivateTriggerByTag(TriggerTag);
+```
+
 常用 API：
 
 - `Initialize`
@@ -642,6 +680,11 @@ Runner->StartDialogue(DialogueTree);
 - `SaveState`
 - `LoadState`
 - `PerformRollback`
+- `GetTriggerManager`
+- `TryActivateTrigger`
+- `TryActivateTriggerByTag`
+- `TryActivateBestTrigger`
+- `EvaluateAutoTriggers`
 
 常用事件：
 
@@ -651,6 +694,23 @@ Runner->StartDialogue(DialogueTree);
 - `OnChoicesPresented`
 - `OnDialogueEvent`
 - `OnRunnerStateChanged`
+- `OnTriggerActivated`
+- `OnTriggerRejected`
+
+### Dialogue Trigger
+
+当同一个 Dialogue Tree 需要由世界交互、任务事件或自动流程激活时，可以创建 `Dialogue Trigger` 资产。Trigger 保存：
+
+- `TriggerTag`
+- `TargetTree`
+- `EntryNode`
+- `TriggerType`：`Proximity`、`Interact`、`Auto` 或 `Event`
+- `ActivationConditions`
+- `CooldownTime`
+- `bOneShot`
+- `Priority`
+
+把 Trigger 注册到 `UDialogueTriggerManager`，也可以用 Gameplay Tag 直接激活指定 Trigger。Manager 会用 Runner 的变量库评估条件，拦截冷却和已消耗的一次性 Trigger，广播 `OnTriggerActivated`，并在可用时通过表现层控制器启动目标对话。
 
 ## 8. 变量读写
 

@@ -11,6 +11,10 @@ UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Animation_Play, "Chronicle.Animation
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Audio_PlayVoice, "Chronicle.Audio.PlayVoice");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Audio_StopVoice, "Chronicle.Audio.StopVoice");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Speaker_Alice, "Chronicle.Speaker.Alice");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Trigger_Cooldown, "Chronicle.Trigger.Cooldown");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Trigger_High, "Chronicle.Trigger.High");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Trigger_Low, "Chronicle.Trigger.Low");
+UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Trigger_Test, "Chronicle.Trigger.Test");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Variable_Flag, "Chronicle.Variable.Flag");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Variable_Name, "Chronicle.Variable.Name");
 UE_DEFINE_GAMEPLAY_TAG_STATIC(TAG_Chronicle_Variable_Score, "Chronicle.Variable.Score");

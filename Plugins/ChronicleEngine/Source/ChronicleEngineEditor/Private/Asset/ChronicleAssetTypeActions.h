@@ -32,3 +32,10 @@ public:
     virtual FText GetName() const override;
     virtual UClass* GetSupportedClass() const override;
 };
+
+class FAssetTypeActions_DialogueTrigger final : public FChronicleAssetTypeActionsBase
+{
+public:
+    virtual FText GetName() const override;
+    virtual UClass* GetSupportedClass() const override;
+};

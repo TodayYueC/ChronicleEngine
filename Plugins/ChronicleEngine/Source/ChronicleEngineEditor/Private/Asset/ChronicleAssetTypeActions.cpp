@@ -2,6 +2,7 @@
 
 #include "Data/DialogueDatabase.h"
 #include "Data/DialogueTree.h"
+#include "Data/DialogueTrigger.h"
 #include "Data/SpeakerProfile.h"
 #include "Editor/DialogueTreeEditorToolkit.h"
 
@@ -47,6 +48,16 @@ FText FAssetTypeActions_SpeakerProfile::GetName() const
 UClass* FAssetTypeActions_SpeakerProfile::GetSupportedClass() const
 {
     return USpeakerProfile::StaticClass();
+}
+
+FText FAssetTypeActions_DialogueTrigger::GetName() const
+{
+    return LOCTEXT("DialogueTriggerName", "Dialogue Trigger");
+}
+
+UClass* FAssetTypeActions_DialogueTrigger::GetSupportedClass() const
+{
+    return UDialogueTrigger::StaticClass();
 }
 
 #undef LOCTEXT_NAMESPACE

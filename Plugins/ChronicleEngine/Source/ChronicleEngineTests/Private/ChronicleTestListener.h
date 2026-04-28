@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "Core/ChronicleTypes.h"
+#include "Data/DialogueTrigger.h"
+#include "Runtime/DialogueTriggerManager.h"
 #include "UObject/Object.h"
 #include "ChronicleTestListener.generated.h"
 
@@ -29,6 +31,12 @@ public:
     int32 EventCount = 0;
 
     UPROPERTY()
+    int32 TriggerActivatedCount = 0;
+
+    UPROPERTY()
+    int32 TriggerRejectedCount = 0;
+
+    UPROPERTY()
     FDialogueLine LastLine;
 
     UPROPERTY()
@@ -39,6 +47,12 @@ public:
 
     UPROPERTY()
     TArray<FDialogueEventData> EventHistory;
+
+    UPROPERTY()
+    FDialogueTriggerActivation LastTriggerActivation;
+
+    UPROPERTY()
+    FText LastTriggerRejectReason;
 
     UFUNCTION()
     void HandleDialogueStarted(UDialogueTree* Tree)
@@ -72,5 +86,19 @@ public:
         ++EventCount;
         LastEvent = EventData;
         EventHistory.Add(EventData);
+    }
+
+    UFUNCTION()
+    void HandleTriggerActivated(const FDialogueTriggerActivation& Activation)
+    {
+        ++TriggerActivatedCount;
+        LastTriggerActivation = Activation;
+    }
+
+    UFUNCTION()
+    void HandleTriggerRejected(UDialogueTrigger* Trigger, const FText& Reason)
+    {
+        ++TriggerRejectedCount;
+        LastTriggerRejectReason = Reason;
     }
 };
