@@ -7,6 +7,8 @@
 #include "Editor/ChronicleDialogueGraphNode.h"
 #include "Editor/ChronicleDialogueNodeDetails.h"
 #include "EdGraph/EdGraph.h"
+#include "Framework/Commands/GenericCommands.h"
+#include "Framework/Commands/UICommandList.h"
 #include "GraphEditor.h"
 #include "IDetailsView.h"
 #include "InputCoreTypes.h"
@@ -266,6 +268,7 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
     EdgeSlotIndex = 0;
     EdgeCondition.Reset();
     RebuildGraph();
+    BindGraphCommands();
 
     NodeDetails = TStrongObjectPtr<UChronicleDialogueNodeDetails>(NewObject<UChronicleDialogueNodeDetails>(GetTransientPackage()));
     FDetailsViewArgs DetailsViewArgs;
@@ -348,6 +351,55 @@ void SDialogueTreeEditor::Construct(const FArguments& InArgs)
                 SNew(SButton)
                 .Text(LOCTEXT("CreateEdgeToSelected", "Link To Selected"))
                 .OnClicked(this, &SDialogueTreeEditor::HandleCreateEdgeToSelectedClicked)
+            ]
+
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .Text(LOCTEXT("CopySelected", "Copy"))
+                .IsEnabled(this, &SDialogueTreeEditor::HasSelectedDialogueNodes)
+                .OnClicked(this, &SDialogueTreeEditor::HandleCopySelectedNodesClicked)
+            ]
+
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .Text(LOCTEXT("PasteNodes", "Paste"))
+                .IsEnabled(this, &SDialogueTreeEditor::CanPasteNodes)
+                .OnClicked(this, &SDialogueTreeEditor::HandlePasteNodesClicked)
+            ]
+
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .Text(LOCTEXT("DuplicateSelected", "Duplicate"))
+                .IsEnabled(this, &SDialogueTreeEditor::HasSelectedDialogueNodes)
+                .OnClicked(this, &SDialogueTreeEditor::HandleDuplicateSelectedNodesClicked)
+            ]
+
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .Text(LOCTEXT("DeleteSelected", "Delete"))
+                .IsEnabled(this, &SDialogueTreeEditor::HasSelectedDialogueNodes)
+                .OnClicked(this, &SDialogueTreeEditor::HandleDeleteSelectedNodesClicked)
+            ]
+
+            + SHorizontalBox::Slot()
+            .AutoWidth()
+            .Padding(2.0f)
+            [
+                SNew(SButton)
+                .Text(LOCTEXT("ZoomToFit", "Zoom To Fit"))
+                .OnClicked(this, &SDialogueTreeEditor::HandleZoomToFitClicked)
             ]
 
             + SHorizontalBox::Slot()
@@ -667,6 +719,36 @@ FReply SDialogueTreeEditor::HandleCreateEdgeToSelectedClicked()
     return FReply::Handled();
 }
 
+FReply SDialogueTreeEditor::HandleCopySelectedNodesClicked()
+{
+    ExecuteCopySelectedNodes();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandlePasteNodesClicked()
+{
+    ExecutePasteNodes();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleDuplicateSelectedNodesClicked()
+{
+    ExecuteDuplicateSelectedNodes();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleDeleteSelectedNodesClicked()
+{
+    ExecuteDeleteSelectedNodes();
+    return FReply::Handled();
+}
+
+FReply SDialogueTreeEditor::HandleZoomToFitClicked()
+{
+    ExecuteZoomToFit();
+    return FReply::Handled();
+}
+
 FReply SDialogueTreeEditor::HandleAcquireLockClicked()
 {
     if (DialogueTree.IsValid())
@@ -888,6 +970,188 @@ FText SDialogueTreeEditor::GetLinkStateText() const
         FText::AsNumber(EdgeSlotIndex));
 }
 
+bool SDialogueTreeEditor::HasSelectedDialogueNodes() const
+{
+    return GetSelectedDialogueNodeGuids().Num() > 0;
+}
+
+bool SDialogueTreeEditor::CanPasteNodes() const
+{
+    return DialogueTree.IsValid() && CopiedNodeGuids.Num() > 0;
+}
+
+void SDialogueTreeEditor::BindGraphCommands()
+{
+    GraphCommandList = MakeShared<FUICommandList>();
+    const FGenericCommands& GenericCommands = FGenericCommands::Get();
+
+    GraphCommandList->MapAction(
+        GenericCommands.Copy,
+        FExecuteAction::CreateSP(this, &SDialogueTreeEditor::ExecuteCopySelectedNodes),
+        FCanExecuteAction::CreateSP(this, &SDialogueTreeEditor::HasSelectedDialogueNodes));
+
+    GraphCommandList->MapAction(
+        GenericCommands.Paste,
+        FExecuteAction::CreateSP(this, &SDialogueTreeEditor::ExecutePasteNodes),
+        FCanExecuteAction::CreateSP(this, &SDialogueTreeEditor::CanPasteNodes));
+
+    GraphCommandList->MapAction(
+        GenericCommands.Duplicate,
+        FExecuteAction::CreateSP(this, &SDialogueTreeEditor::ExecuteDuplicateSelectedNodes),
+        FCanExecuteAction::CreateSP(this, &SDialogueTreeEditor::HasSelectedDialogueNodes));
+
+    GraphCommandList->MapAction(
+        GenericCommands.Delete,
+        FExecuteAction::CreateSP(this, &SDialogueTreeEditor::ExecuteDeleteSelectedNodes),
+        FCanExecuteAction::CreateSP(this, &SDialogueTreeEditor::HasSelectedDialogueNodes));
+}
+
+void SDialogueTreeEditor::ExecuteCopySelectedNodes()
+{
+    CopiedNodeGuids = GetSelectedDialogueNodeGuids();
+}
+
+void SDialogueTreeEditor::ExecutePasteNodes()
+{
+    if (!DialogueTree.IsValid() || CopiedNodeGuids.Num() == 0)
+    {
+        return;
+    }
+
+    TArray<FGuid> DuplicatedNodeGuids;
+    FString Error;
+    if (!UChronicleDialogueEditorLibrary::DuplicateDialogueNodes(DialogueTree.Get(), CopiedNodeGuids, FVector2D(160.0f, 80.0f), DuplicatedNodeGuids, Error))
+    {
+        return;
+    }
+
+    CopiedNodeGuids = DuplicatedNodeGuids;
+    RebuildGraph();
+    RefreshCanvas();
+    SelectGraphNodes(DuplicatedNodeGuids);
+    SelectedNodeGuid = DuplicatedNodeGuids.Num() > 0 ? DuplicatedNodeGuids[0] : FGuid();
+    RefreshInspector();
+    RefreshValidationSummary();
+}
+
+void SDialogueTreeEditor::ExecuteDuplicateSelectedNodes()
+{
+    if (!DialogueTree.IsValid())
+    {
+        return;
+    }
+
+    const TArray<FGuid> SelectedNodeGuids = GetSelectedDialogueNodeGuids();
+    if (SelectedNodeGuids.Num() == 0)
+    {
+        return;
+    }
+
+    TArray<FGuid> DuplicatedNodeGuids;
+    FString Error;
+    if (!UChronicleDialogueEditorLibrary::DuplicateDialogueNodes(DialogueTree.Get(), SelectedNodeGuids, FVector2D(160.0f, 80.0f), DuplicatedNodeGuids, Error))
+    {
+        return;
+    }
+
+    CopiedNodeGuids = SelectedNodeGuids;
+    RebuildGraph();
+    RefreshCanvas();
+    SelectGraphNodes(DuplicatedNodeGuids);
+    SelectedNodeGuid = DuplicatedNodeGuids.Num() > 0 ? DuplicatedNodeGuids[0] : FGuid();
+    RefreshInspector();
+    RefreshValidationSummary();
+}
+
+void SDialogueTreeEditor::ExecuteDeleteSelectedNodes()
+{
+    if (!DialogueTree.IsValid())
+    {
+        return;
+    }
+
+    const TArray<FGuid> SelectedNodeGuids = GetSelectedDialogueNodeGuids();
+    if (SelectedNodeGuids.Num() == 0)
+    {
+        return;
+    }
+
+    int32 RemovedNodeCount = 0;
+    int32 RemovedEdgeCount = 0;
+    FString Error;
+    if (!UChronicleDialogueEditorLibrary::RemoveDialogueNodes(DialogueTree.Get(), SelectedNodeGuids, RemovedNodeCount, RemovedEdgeCount, Error))
+    {
+        return;
+    }
+
+    SelectedNodeGuid.Invalidate();
+    PendingEdgeSourceGuid.Invalidate();
+    RebuildGraph();
+    RefreshCanvas();
+    RefreshInspector();
+    RefreshDebuggerSummary();
+    RefreshValidationSummary();
+}
+
+void SDialogueTreeEditor::ExecuteZoomToFit()
+{
+    if (GraphEditor.IsValid())
+    {
+        GraphEditor->ZoomToFit(false);
+    }
+}
+
+TArray<FGuid> SDialogueTreeEditor::GetSelectedDialogueNodeGuids() const
+{
+    TArray<FGuid> SelectedNodeGuids;
+    TSet<FGuid> SeenNodeGuids;
+
+    if (GraphEditor.IsValid())
+    {
+        const FGraphPanelSelectionSet Selection = GraphEditor->GetSelectedNodes();
+        for (UObject* SelectedObject : Selection)
+        {
+            if (const UChronicleDialogueGraphNode* GraphNode = Cast<UChronicleDialogueGraphNode>(SelectedObject))
+            {
+                if (GraphNode->DialogueNodeGuid.IsValid() && !SeenNodeGuids.Contains(GraphNode->DialogueNodeGuid))
+                {
+                    SeenNodeGuids.Add(GraphNode->DialogueNodeGuid);
+                    SelectedNodeGuids.Add(GraphNode->DialogueNodeGuid);
+                }
+            }
+        }
+    }
+
+    if (SelectedNodeGuids.Num() == 0 && SelectedNodeGuid.IsValid())
+    {
+        SelectedNodeGuids.Add(SelectedNodeGuid);
+    }
+
+    return SelectedNodeGuids;
+}
+
+void SDialogueTreeEditor::SelectGraphNodes(const TArray<FGuid>& NodeGuids)
+{
+    if (!GraphEditor.IsValid() || !DialogueGraph.IsValid())
+    {
+        return;
+    }
+
+    GraphEditor->ClearSelectionSet();
+    for (const FGuid& NodeGuid : NodeGuids)
+    {
+        if (UChronicleDialogueGraphNode* GraphNode = DialogueGraph->FindDialogueGraphNode(NodeGuid))
+        {
+            GraphEditor->SetNodeSelection(GraphNode, true);
+        }
+    }
+
+    if (NodeGuids.Num() > 0)
+    {
+        GraphEditor->ZoomToFit(true);
+    }
+}
+
 void SDialogueTreeEditor::RebuildGraph()
 {
     if (DialogueGraph.IsValid() && GraphChangedHandle.IsValid())
@@ -1039,6 +1303,7 @@ TSharedRef<SWidget> SDialogueTreeEditor::BuildCanvas()
 
     return SAssignNew(GraphEditor, SGraphEditor)
         .GraphToEdit(DialogueGraph.Get())
+        .AdditionalCommands(GraphCommandList)
         .GraphEvents(GraphEvents)
         .Appearance(AppearanceInfo)
         .IsEditable(true);

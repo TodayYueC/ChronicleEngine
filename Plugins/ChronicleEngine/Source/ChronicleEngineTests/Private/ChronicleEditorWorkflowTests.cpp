@@ -47,6 +47,8 @@ bool FChronicleEditorNodeDisplayNameTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Speech display name"), UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(EDialogueNodeType::Speech).ToString(), FString(TEXT("Speech")));
     TestEqual(TEXT("Choice display name"), UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(EDialogueNodeType::Choice).ToString(), FString(TEXT("Choice")));
     TestEqual(TEXT("Condition display name"), UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(EDialogueNodeType::Condition).ToString(), FString(TEXT("Condition")));
+    TestEqual(TEXT("Random display name"), UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(EDialogueNodeType::Random).ToString(), FString(TEXT("Random")));
+    TestEqual(TEXT("Animation display name"), UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(EDialogueNodeType::Animation).ToString(), FString(TEXT("Animation")));
     return true;
 }
 
@@ -93,6 +95,71 @@ bool FChronicleEditorEdgeEditingTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("One matching edge removed"), RemovedCount, 1);
     TestEqual(TEXT("One edge remains"), Tree->Edges.Num(), 1);
     TestEqual(TEXT("Conditional edge remains"), Tree->Edges[0].ToNodeGuid, ChoiceGuid);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleEditorNodeDuplicateDeleteTest, "Chronicle.Editor.TreeEditor.DuplicateAndDeleteNodes", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleEditorNodeDuplicateDeleteTest::RunTest(const FString& Parameters)
+{
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+
+    FString Error;
+    FGuid RootGuid;
+    FGuid SpeechGuid;
+    FGuid ChoiceGuid;
+    TestTrue(TEXT("Root node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Root, FVector2D::ZeroVector, RootGuid, Error));
+    TestTrue(TEXT("Speech node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Speech, FVector2D(100.0f, 0.0f), SpeechGuid, Error));
+    TestTrue(TEXT("Choice node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Choice, FVector2D(240.0f, 0.0f), ChoiceGuid, Error));
+
+    FDialogueEdge RootToSpeech;
+    FDialogueEdge SpeechToChoice;
+    TestTrue(TEXT("Root can link to speech"), UChronicleDialogueEditorLibrary::AddDialogueEdge(Tree, RootGuid, SpeechGuid, 0, FString(), RootToSpeech, Error));
+    TestTrue(TEXT("Speech can link to choice"), UChronicleDialogueEditorLibrary::AddDialogueEdge(Tree, SpeechGuid, ChoiceGuid, 0, FString(), SpeechToChoice, Error));
+    TestTrue(TEXT("Breakpoint can be set before deletion"), UChronicleDialogueEditorLibrary::SetDialogueNodeBreakpoint(Tree, SpeechGuid, true, TEXT("Delete cleanup"), Error));
+
+    TArray<FGuid> NodesToDuplicate;
+    NodesToDuplicate.Add(SpeechGuid);
+    NodesToDuplicate.Add(ChoiceGuid);
+
+    TArray<FGuid> DuplicatedGuids;
+    TestTrue(TEXT("Selected non-root nodes can be duplicated"), UChronicleDialogueEditorLibrary::DuplicateDialogueNodes(Tree, NodesToDuplicate, FVector2D(160.0f, 80.0f), DuplicatedGuids, Error));
+    TestEqual(TEXT("Two nodes duplicated"), DuplicatedGuids.Num(), 2);
+    TestEqual(TEXT("Tree has original and duplicated nodes"), Tree->Nodes.Num(), 5);
+    TestEqual(TEXT("Internal selected edge is duplicated"), Tree->Edges.Num(), 3);
+
+    const FDialogueNode* DuplicatedSpeech = Tree->FindNode(DuplicatedGuids[0]);
+    const FDialogueNode* OriginalSpeech = Tree->FindNode(SpeechGuid);
+    TestNotNull(TEXT("Duplicated speech node exists"), DuplicatedSpeech);
+    TestNotNull(TEXT("Original speech node exists"), OriginalSpeech);
+    if (DuplicatedSpeech && OriginalSpeech)
+    {
+        TestEqual(TEXT("Duplicated node position is offset"), DuplicatedSpeech->Position, OriginalSpeech->Position + FVector2D(160.0f, 80.0f));
+        TestNotEqual(TEXT("Duplicated line has a fresh LineID"), DuplicatedSpeech->Lines[0].LineID, OriginalSpeech->Lines[0].LineID);
+    }
+
+    TArray<FGuid> RootOnlySource;
+    RootOnlySource.Add(RootGuid);
+    TArray<FGuid> RootOnlyDuplicate;
+    TestFalse(TEXT("Root-only duplication is rejected"), UChronicleDialogueEditorLibrary::DuplicateDialogueNodes(Tree, RootOnlySource, FVector2D(160.0f, 80.0f), RootOnlyDuplicate, Error));
+    TestTrue(TEXT("Root-only duplicate reports an error"), !Error.IsEmpty());
+
+    int32 RemovedNodeCount = 0;
+    int32 RemovedEdgeCount = 0;
+    TArray<FGuid> NodesToDelete;
+    NodesToDelete.Add(SpeechGuid);
+    TestTrue(TEXT("Selected node can be deleted"), UChronicleDialogueEditorLibrary::RemoveDialogueNodes(Tree, NodesToDelete, RemovedNodeCount, RemovedEdgeCount, Error));
+    TestEqual(TEXT("One node removed"), RemovedNodeCount, 1);
+    TestEqual(TEXT("Edges attached to removed node are removed"), RemovedEdgeCount, 2);
+    TestNull(TEXT("Deleted node no longer exists"), Tree->FindNode(SpeechGuid));
+    TestFalse(TEXT("Breakpoint metadata for deleted node is removed"), UChronicleDialogueEditorLibrary::IsDialogueNodeBreakpointSet(Tree, SpeechGuid));
+
+    for (const FDialogueEdge& Edge : Tree->Edges)
+    {
+        TestNotEqual(TEXT("No remaining edge starts at deleted node"), Edge.FromNodeGuid, SpeechGuid);
+        TestNotEqual(TEXT("No remaining edge ends at deleted node"), Edge.ToNodeGuid, SpeechGuid);
+    }
 
     return true;
 }
@@ -182,13 +249,22 @@ bool FChronicleEditorGraphContextActionsTest::RunTest(const FString& Parameters)
 
     TArray<EDialogueNodeType> SupportedNodeTypes;
     UChronicleDialogueGraphSchema::GetSupportedContextNodeTypes(SupportedNodeTypes);
-    TestTrue(TEXT("Context menu supports M3 node actions"), SupportedNodeTypes.Num() >= 5);
+    TestEqual(TEXT("Context menu supports all PRD node actions"), SupportedNodeTypes.Num(), 12);
+    TestTrue(TEXT("Context menu supports Root nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Root));
     TestTrue(TEXT("Context menu supports Speech nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Speech));
     TestTrue(TEXT("Context menu supports Choice nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Choice));
     TestTrue(TEXT("Context menu supports Condition nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Condition));
+    TestTrue(TEXT("Context menu supports Event nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Event));
+    TestTrue(TEXT("Context menu supports Wait nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Wait));
+    TestTrue(TEXT("Context menu supports Random nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Random));
+    TestTrue(TEXT("Context menu supports Jump nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Jump));
+    TestTrue(TEXT("Context menu supports Sequence nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Sequence));
+    TestTrue(TEXT("Context menu supports SubDialogue nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::SubDialogue));
+    TestTrue(TEXT("Context menu supports Camera nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Camera));
+    TestTrue(TEXT("Context menu supports Animation nodes"), SupportedNodeTypes.Contains(EDialogueNodeType::Animation));
 
     FString Error;
-    UEdGraphNode* CreatedNode = Graph->AddDialogueNodeFromSchemaAction(SupportedNodeTypes[0], FVector2D(88.0f, 144.0f), Error);
+    UEdGraphNode* CreatedNode = Graph->AddDialogueNodeFromSchemaAction(EDialogueNodeType::Speech, FVector2D(88.0f, 144.0f), Error);
     TestNotNull(TEXT("Context action creates a graph node"), CreatedNode);
     TestEqual(TEXT("Context action adds one dialogue node"), Tree->Nodes.Num(), 1);
     TestEqual(TEXT("Created node position comes from context location"), Tree->Nodes[0].Position, FVector2D(88.0f, 144.0f));

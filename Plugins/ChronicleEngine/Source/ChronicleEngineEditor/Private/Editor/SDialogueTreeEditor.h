@@ -9,6 +9,7 @@
 
 class SGraphEditor;
 class UDialogueTree;
+class FUICommandList;
 class IDetailsView;
 class SBox;
 class STextBlock;
@@ -33,6 +34,11 @@ private:
     FReply HandleSaveGraphLayoutClicked();
     FReply HandleUseSelectedAsLinkSourceClicked();
     FReply HandleCreateEdgeToSelectedClicked();
+    FReply HandleCopySelectedNodesClicked();
+    FReply HandlePasteNodesClicked();
+    FReply HandleDuplicateSelectedNodesClicked();
+    FReply HandleDeleteSelectedNodesClicked();
+    FReply HandleZoomToFitClicked();
     FReply HandleAcquireLockClicked();
     FReply HandleReleaseLockClicked();
     FReply HandleToggleBreakpointClicked();
@@ -49,6 +55,16 @@ private:
     void HandleNodeDetailsChanged(const FPropertyChangedEvent& PropertyChangedEvent);
     int32 GetEdgeSlotIndex() const;
     FText GetLinkStateText() const;
+    bool HasSelectedDialogueNodes() const;
+    bool CanPasteNodes() const;
+    void BindGraphCommands();
+    void ExecuteCopySelectedNodes();
+    void ExecutePasteNodes();
+    void ExecuteDuplicateSelectedNodes();
+    void ExecuteDeleteSelectedNodes();
+    void ExecuteZoomToFit();
+    TArray<FGuid> GetSelectedDialogueNodeGuids() const;
+    void SelectGraphNodes(const TArray<FGuid>& NodeGuids);
     void RebuildGraph();
     void RefreshCanvas();
     void RefreshInspector();
@@ -67,6 +83,7 @@ private:
     TStrongObjectPtr<UChronicleDialogueGraph> DialogueGraph;
     TStrongObjectPtr<UChronicleDialogueNodeDetails> NodeDetails;
     TSharedPtr<SGraphEditor> GraphEditor;
+    TSharedPtr<FUICommandList> GraphCommandList;
     TSharedPtr<IDetailsView> NodeDetailsView;
     FDelegateHandle GraphChangedHandle;
     TSharedPtr<SBox> CanvasHost;
@@ -78,6 +95,7 @@ private:
     TArray<FGuid> VisibleNodeGuids;
     FGuid SelectedNodeGuid;
     FGuid PendingEdgeSourceGuid;
+    TArray<FGuid> CopiedNodeGuids;
     int32 EdgeSlotIndex = 0;
     FString EdgeCondition;
 };

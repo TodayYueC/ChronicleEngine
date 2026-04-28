@@ -1,4 +1,25 @@
-# Chronicle Engine 0.5.0 Release Notes
+# Chronicle Engine Release Notes
+
+## 0.6.0-dev Editor Workflow Pass
+
+This development pass expands the Dialogue Tree editor toward the full PRD editing workflow.
+
+### Highlights
+
+- The graph context menu now exposes every PRD node type: Root, Speech, Choice, Condition, Event, Wait, Random, Jump, Sequence, SubDialogue, Camera, and Animation.
+- Editor helper APIs now support deleting selected nodes and duplicating selected node groups.
+- Duplicating a node group preserves internal selected edges and assigns fresh node GUIDs and line IDs.
+- Deleting selected nodes now removes attached edges and stale breakpoint metadata.
+- The editor toolbar and graph command list now expose copy, paste, duplicate, delete, and zoom-to-fit actions.
+- Graph node summaries and colors now cover Random, Jump, Sequence, SubDialogue, Camera, and Animation nodes.
+
+### Verification
+
+- UE 5.3 editor build: passed.
+- UE 5.3 `Chronicle` automation suite: 28 tests passed.
+- 100-node condition traversal recorded `0.0507ms` after warm-up.
+
+## 0.5.0 Release Notes
 
 Chronicle Engine 0.5.0 is the M5 hardening pass for the UE5 JRPG dialogue plugin.
 
@@ -13,13 +34,13 @@ Chronicle Engine 0.5.0 is the M5 hardening pass for the UE5 JRPG dialogue plugin
 - Variable name to Gameplay Tag resolution is cached in `UVariableBank`.
 - Repeated condition results are cached during a dialogue run and invalidated when variables, save state, or events can change runtime state.
 - Rollback mementos are now stored at player-visible pause points instead of every internal node transition.
-- The 100-node condition traversal automation budget is tightened to `0.25ms`; the latest UE 5.3 editor automation run recorded `0.0483ms` after warm-up.
+- The 100-node condition traversal automation budget is tightened to `0.25ms`; the latest UE 5.3 editor automation run recorded `0.0507ms` after warm-up.
 - Packaging is scripted with `Scripts/PackagePlugin.ps1`.
 
 ## Verification
 
 - UE 5.3 editor build: passed.
-- UE 5.3 `Chronicle` automation suite: 27 tests passed.
+- UE 5.3 `Chronicle` automation suite: 28 tests passed.
 - UE 5.7 editor build smoke: passed.
 - UE 5.3 `BuildPlugin` package: passed for Win64 Editor, Development Game, and Shipping Game targets.
 

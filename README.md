@@ -2,7 +2,7 @@
 
 Chronicle Engine is an MIT-licensed Unreal Engine 5 plugin for JRPG-style dialogue and narrative systems. It provides a runtime dialogue runner, asset import/export pipeline, native editor graph workflow, UMG presentation foundation, automated tests, and release packaging support.
 
-- Current development version: `v0.5.1-dev`
+- Current development version: `v0.6.0-dev`
 - Latest packaged release: `v0.5.0`
 - Primary engine baseline: UE 5.3
 - Compatibility smoke target: UE 5.7
@@ -27,7 +27,7 @@ Main features:
 - Root, Speech, Choice, Condition, Event, Wait, Random, Jump, SubDialogue, Camera, and Animation nodes.
 - Variables, condition expressions, save/load, and rollback.
 - JSON import/export, CSV text import/export, and structure validation.
-- Native Slate graph editor, search, breakpoints, soft locks, and debug snapshots.
+- Native Slate graph editor, full PRD node creation, search, copy/paste/duplicate/delete, breakpoints, soft locks, and debug snapshots.
 - `UChronicleDialoguePresentationController` for UI-facing flow control.
 - `UChronicleDialogueWidget` as the default UMG base class.
 - Auto, Skip, Backlog, Rollback, and Choice forwarding.
@@ -56,7 +56,7 @@ YourProject/Plugins/ChronicleEngine
 2. Open `ChronicleHost.uproject` with UE 5.3.
 3. Build `ChronicleHostEditor`.
 4. Test the plugin in the host project, or copy `Plugins/ChronicleEngine` into another UE project.
-5. Use this option for the latest development version, currently `v0.5.1-dev`.
+5. Use this option for the latest development version, currently `v0.6.0-dev`.
 
 ## 3. Build And Test
 
@@ -75,10 +75,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 Current verification status:
 
 - UE 5.3 build passes.
-- UE 5.3 `Chronicle` automation tests pass: 27/27.
+- UE 5.3 `Chronicle` automation tests pass: 28/28.
 - UE 5.7 build smoke passes.
 - UE 5.3 BuildPlugin packaging passes.
-- 100-node condition traversal budget: `0.25ms`; latest warm-path run: `0.0483ms`.
+- 100-node condition traversal budget: `0.25ms`; latest warm-path run: `0.0507ms`.
 
 ## 4. Create Core Assets
 
@@ -133,10 +133,12 @@ Runtime systems can use it to initialize variables and look up dialogue resource
 
 The custom editor supports:
 
-- Creating nodes from the context menu.
+- Creating all PRD node types from the context menu.
 - Dragging nodes.
 - Connecting pins to create edges.
 - Breaking pins to remove edges.
+- Copying, pasting, duplicating, and deleting selected nodes from the toolbar or graph shortcuts.
+- Zooming the graph to fit the current tree or selected nodes.
 - Editing selected nodes in Details.
 - Searching for nodes.
 - Validating broken edges, missing roots, unreachable nodes, and other structure issues.
@@ -496,7 +498,7 @@ Call `RequestRollback` on the Presentation Controller instead of bypassing it an
 - Root、Speech、Choice、Condition、Event、Wait、Random、Jump、SubDialogue、Camera、Animation 节点。
 - 条件表达式、变量系统、保存加载、回滚。
 - JSON 导入导出、CSV 文本导入导出、结构校验。
-- 原生 Slate 图编辑器、节点搜索、断点、软锁、调试快照。
+- 原生 Slate 图编辑器、完整 PRD 节点创建、节点搜索、复制/粘贴/复制副本/删除、断点、软锁、调试快照。
 - `UChronicleDialoguePresentationController` 表现层控制器。
 - `UChronicleDialogueWidget` UMG 基类。
 - Auto、Skip、Backlog、Rollback、Choice 转发。
@@ -525,7 +527,7 @@ YourProject/Plugins/ChronicleEngine
 2. 用 UE 5.3 打开 `ChronicleHost.uproject`。
 3. 编译 `ChronicleHostEditor`。
 4. 在宿主项目中测试插件或把 `Plugins/ChronicleEngine` 复制到其他 UE 项目。
-5. 如需最新开发版，请使用此方式；当前开发版为 `v0.5.1-dev`。
+5. 如需最新开发版，请使用此方式；当前开发版为 `v0.6.0-dev`。
 
 ## 3. 编译与测试
 
@@ -544,10 +546,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 当前验证状态：
 
 - UE 5.3 编译通过。
-- UE 5.3 `Chronicle` 自动化测试 27/27 通过。
+- UE 5.3 `Chronicle` 自动化测试 28/28 通过。
 - UE 5.7 编译冒烟通过。
 - UE 5.3 BuildPlugin 打包通过。
-- 100 节点条件遍历测试预算：`0.25ms`；最新热路径实测 `0.0483ms`。
+- 100 节点条件遍历测试预算：`0.25ms`；最新热路径实测 `0.0507ms`。
 
 ## 4. 创建基础数据资产
 
@@ -602,10 +604,12 @@ Dialogue Database 用来集中管理：
 
 打开 Dialogue Tree 后，可以使用自定义图编辑器：
 
-- 右键创建节点。
+- 右键创建全部 PRD 节点类型。
 - 拖拽节点调整位置。
 - 连接 Pin 创建边。
 - 删除连接移除边。
+- 通过工具栏或图快捷键复制、粘贴、复制副本和删除选中节点。
+- 将图缩放到适合当前树或当前选区的视图。
 - 在 Details 面板编辑选中节点。
 - 使用搜索定位节点。
 - 使用校验面板检查坏边、缺失 Root、不可达节点等问题。

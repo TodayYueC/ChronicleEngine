@@ -132,6 +132,159 @@ bool UChronicleDialogueEditorLibrary::SetDialogueNodePosition(UDialogueTree* Tre
     return true;
 }
 
+bool UChronicleDialogueEditorLibrary::RemoveDialogueNodes(UDialogueTree* Tree, const TArray<FGuid>& NodeGuids, int32& OutRemovedNodeCount, int32& OutRemovedEdgeCount, FString& OutError)
+{
+    OutRemovedNodeCount = 0;
+    OutRemovedEdgeCount = 0;
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    TSet<FGuid> NodeGuidSet;
+    for (const FGuid& NodeGuid : NodeGuids)
+    {
+        if (NodeGuid.IsValid())
+        {
+            NodeGuidSet.Add(NodeGuid);
+        }
+    }
+
+    if (NodeGuidSet.Num() == 0)
+    {
+        OutError = TEXT("No valid dialogue node GUIDs were supplied.");
+        return false;
+    }
+
+    Tree->Modify();
+
+    for (int32 Index = Tree->Nodes.Num() - 1; Index >= 0; --Index)
+    {
+        if (NodeGuidSet.Contains(Tree->Nodes[Index].NodeGuid))
+        {
+            if (Tree->RootNodeGuid == Tree->Nodes[Index].NodeGuid)
+            {
+                Tree->RootNodeGuid.Invalidate();
+            }
+
+            Tree->Nodes.RemoveAt(Index);
+            ++OutRemovedNodeCount;
+        }
+    }
+
+    for (int32 Index = Tree->Edges.Num() - 1; Index >= 0; --Index)
+    {
+        if (NodeGuidSet.Contains(Tree->Edges[Index].FromNodeGuid) || NodeGuidSet.Contains(Tree->Edges[Index].ToNodeGuid))
+        {
+            Tree->Edges.RemoveAt(Index);
+            ++OutRemovedEdgeCount;
+        }
+    }
+
+    Tree->EditorStates.RemoveAll([&NodeGuidSet](const FDialogueNodeEditorState& State)
+    {
+        return NodeGuidSet.Contains(State.NodeGuid);
+    });
+
+    if (OutRemovedNodeCount == 0)
+    {
+        OutError = TEXT("No matching dialogue nodes were found.");
+        return false;
+    }
+
+    Tree->EnsureStableGuids();
+    Tree->MarkPackageDirty();
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::DuplicateDialogueNodes(UDialogueTree* Tree, const TArray<FGuid>& NodeGuids, FVector2D PositionOffset, TArray<FGuid>& OutDuplicatedNodeGuids, FString& OutError)
+{
+    OutDuplicatedNodeGuids.Reset();
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    TSet<FGuid> SourceNodeGuidSet;
+    for (const FGuid& NodeGuid : NodeGuids)
+    {
+        if (NodeGuid.IsValid())
+        {
+            SourceNodeGuidSet.Add(NodeGuid);
+        }
+    }
+
+    if (SourceNodeGuidSet.Num() == 0)
+    {
+        OutError = TEXT("No valid dialogue node GUIDs were supplied.");
+        return false;
+    }
+
+    TArray<FDialogueNode> DuplicatedNodes;
+    TMap<FGuid, FGuid> OldToNewNodeGuids;
+
+    for (const FDialogueNode& SourceNode : Tree->Nodes)
+    {
+        if (!SourceNodeGuidSet.Contains(SourceNode.NodeGuid))
+        {
+            continue;
+        }
+
+        if (SourceNode.NodeType == EDialogueNodeType::Root)
+        {
+            continue;
+        }
+
+        FDialogueNode DuplicatedNode = SourceNode;
+        const FGuid SourceNodeGuid = SourceNode.NodeGuid;
+        DuplicatedNode.NodeGuid = FGuid::NewGuid();
+        DuplicatedNode.Position += PositionOffset;
+
+        for (int32 LineIndex = 0; LineIndex < DuplicatedNode.Lines.Num(); ++LineIndex)
+        {
+            DuplicatedNode.Lines[LineIndex].LineID = FName(*FString::Printf(TEXT("Line_%s_%d"), *DuplicatedNode.NodeGuid.ToString(EGuidFormats::Digits), LineIndex));
+        }
+
+        OldToNewNodeGuids.Add(SourceNodeGuid, DuplicatedNode.NodeGuid);
+        OutDuplicatedNodeGuids.Add(DuplicatedNode.NodeGuid);
+        DuplicatedNodes.Add(DuplicatedNode);
+    }
+
+    if (DuplicatedNodes.Num() == 0)
+    {
+        OutError = TEXT("No duplicatable dialogue nodes were found. Root nodes cannot be duplicated.");
+        return false;
+    }
+
+    TArray<FDialogueEdge> DuplicatedEdges;
+    for (const FDialogueEdge& SourceEdge : Tree->Edges)
+    {
+        const FGuid* NewFromGuid = OldToNewNodeGuids.Find(SourceEdge.FromNodeGuid);
+        const FGuid* NewToGuid = OldToNewNodeGuids.Find(SourceEdge.ToNodeGuid);
+        if (!NewFromGuid || !NewToGuid)
+        {
+            continue;
+        }
+
+        FDialogueEdge DuplicatedEdge = SourceEdge;
+        DuplicatedEdge.FromNodeGuid = *NewFromGuid;
+        DuplicatedEdge.ToNodeGuid = *NewToGuid;
+        DuplicatedEdges.Add(DuplicatedEdge);
+    }
+
+    Tree->Modify();
+    Tree->Nodes.Append(DuplicatedNodes);
+    Tree->Edges.Append(DuplicatedEdges);
+    Tree->EnsureStableGuids();
+    Tree->MarkPackageDirty();
+
+    OutError.Reset();
+    return true;
+}
+
 bool UChronicleDialogueEditorLibrary::AddDialogueEdge(UDialogueTree* Tree, const FGuid& FromNodeGuid, const FGuid& ToNodeGuid, int32 FromSlotIndex, const FString& ConditionExpression, FDialogueEdge& OutEdge, FString& OutError)
 {
     OutEdge = FDialogueEdge();

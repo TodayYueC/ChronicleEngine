@@ -46,6 +46,12 @@ public:
     static bool SetDialogueNodePosition(UDialogueTree* Tree, const FGuid& NodeGuid, FVector2D Position, FString& OutError);
 
     UFUNCTION(BlueprintCallable, Category="Chronicle|Editor|Dialogue Tree")
+    static bool RemoveDialogueNodes(UDialogueTree* Tree, const TArray<FGuid>& NodeGuids, int32& OutRemovedNodeCount, int32& OutRemovedEdgeCount, FString& OutError);
+
+    UFUNCTION(BlueprintCallable, Category="Chronicle|Editor|Dialogue Tree")
+    static bool DuplicateDialogueNodes(UDialogueTree* Tree, const TArray<FGuid>& NodeGuids, FVector2D PositionOffset, TArray<FGuid>& OutDuplicatedNodeGuids, FString& OutError);
+
+    UFUNCTION(BlueprintCallable, Category="Chronicle|Editor|Dialogue Tree")
     static bool AddDialogueEdge(UDialogueTree* Tree, const FGuid& FromNodeGuid, const FGuid& ToNodeGuid, int32 FromSlotIndex, const FString& ConditionExpression, FDialogueEdge& OutEdge, FString& OutError);
 
     UFUNCTION(BlueprintCallable, Category="Chronicle|Editor|Dialogue Tree")

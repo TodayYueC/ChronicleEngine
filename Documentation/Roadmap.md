@@ -19,13 +19,14 @@ Status: current implementation pass.
 
 ## M3 Editor Experience
 
-Status: complete for the planned M3 scope.
+Status: complete for the v0.6 editor workflow pass.
 
 - Dialogue Tree assets open in a Chronicle custom asset editor instead of the default details-only view.
-- Added a native `SGraphEditor` view backed by Chronicle EdGraph/Node/Schema classes, with search selection, validation summary, toolbar and context-menu node creation, graph-position persistence, pin connection edge creation, pin break edge deletion, and conditional edge create/delete controls.
-- Added editor helper APIs for node creation, node movement, edge editing, node search, and node display names.
+- Added a native `SGraphEditor` view backed by Chronicle EdGraph/Node/Schema classes, with search selection, validation summary, toolbar and all-PRD-node context-menu creation, graph-position persistence, pin connection edge creation, pin break edge deletion, and conditional edge create/delete controls.
+- Added editor helper APIs for node creation, node movement, node duplication, node deletion cleanup, edge editing, node search, and node display names.
+- Added toolbar and graph-command support for copy, paste, duplicate, delete, and zoom-to-fit operations.
 - Added selected-node Details editing, breakpoint metadata, debugger snapshot support, and Dialogue Tree / Dialogue Database soft-lock metadata.
-- Remaining editor polish moves to M4/M5: richer presentation widgets, PIE debug UX polish, and release hardening.
+- Remaining editor-adjacent polish moves to localization/audit/release hardening: richer expression widgets, live PIE debugger polish, localization gather commands, and audit reports.
 
 ## M4 Presentation
 
@@ -50,7 +51,7 @@ Status: current release-candidate hardening pass.
 - Added `UDialogueTrigger` assets and `UDialogueTriggerManager` runtime activation flow with priority selection, condition checks, cooldowns, one-shot consumption, tag activation, and subsystem access.
 - Condition expressions compile once into a cached AST, with per-dialogue condition result caching and variable-name tag caching.
 - Rollback mementos are limited to player-visible pause points instead of internal node hops.
-- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.0483ms` after warm-up.
+- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.0507ms` after warm-up.
 - Added release notes, release checklist, and a packaging script.
 - UE 5.7 smoke and UE 5.3 BuildPlugin packaging pass for this release-candidate pass.
 - Remaining before public release: optionally tag `v0.5.0` and attach the package to a GitHub Release.

@@ -34,6 +34,24 @@ void UChronicleDialogueGraphNode::InitializeFromDialogueNode(const FDialogueNode
     case EDialogueNodeType::Event:
         Summary = Node.EventTag.IsValid() ? Node.EventTag.ToString() : TEXT("No event tag");
         break;
+    case EDialogueNodeType::Wait:
+        Summary = Node.WaitTime >= 0.0f ? FString::Printf(TEXT("Wait %.2fs"), Node.WaitTime) : TEXT("Wait for input");
+        break;
+    case EDialogueNodeType::Random:
+        Summary = FString::Printf(TEXT("Random branch\nDefault: %d"), Node.DefaultOutputIndex);
+        break;
+    case EDialogueNodeType::Jump:
+        Summary = Node.TargetEntryNode.IsNone() ? TEXT("Jump to root") : FString::Printf(TEXT("Jump to %s"), *Node.TargetEntryNode.ToString());
+        break;
+    case EDialogueNodeType::SubDialogue:
+        Summary = Node.TargetTree.IsNull() ? TEXT("No target tree") : Node.TargetTree.ToSoftObjectPath().ToString();
+        break;
+    case EDialogueNodeType::Camera:
+        Summary = Node.EventTag.IsValid() ? Node.EventTag.ToString() : TEXT("Camera cue");
+        break;
+    case EDialogueNodeType::Animation:
+        Summary = Node.EventTag.IsValid() ? Node.EventTag.ToString() : TEXT("Animation cue");
+        break;
     default:
         Summary = DialogueNodeGuid.ToString(EGuidFormats::Digits).Left(8);
         break;
@@ -78,6 +96,18 @@ FLinearColor UChronicleDialogueGraphNode::GetNodeTitleColor() const
         return FLinearColor(0.66f, 0.12f, 0.12f, 1.0f);
     case EDialogueNodeType::Wait:
         return FLinearColor(0.35f, 0.35f, 0.35f, 1.0f);
+    case EDialogueNodeType::Random:
+        return FLinearColor(0.05f, 0.52f, 0.55f, 1.0f);
+    case EDialogueNodeType::Jump:
+        return FLinearColor(0.80f, 0.64f, 0.10f, 1.0f);
+    case EDialogueNodeType::Sequence:
+        return FLinearColor(0.82f, 0.82f, 0.82f, 1.0f);
+    case EDialogueNodeType::SubDialogue:
+        return FLinearColor(0.07f, 0.31f, 0.48f, 1.0f);
+    case EDialogueNodeType::Camera:
+        return FLinearColor(0.78f, 0.24f, 0.54f, 1.0f);
+    case EDialogueNodeType::Animation:
+        return FLinearColor(0.45f, 0.29f, 0.15f, 1.0f);
     default:
         return FLinearColor(0.18f, 0.18f, 0.18f, 1.0f);
     }

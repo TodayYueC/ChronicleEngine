@@ -72,11 +72,18 @@ struct FChronicleDialogueGraphSchemaAction_NewNode final : public FEdGraphSchema
 void UChronicleDialogueGraphSchema::GetSupportedContextNodeTypes(TArray<EDialogueNodeType>& OutNodeTypes)
 {
     OutNodeTypes = {
+        EDialogueNodeType::Root,
         EDialogueNodeType::Speech,
         EDialogueNodeType::Choice,
         EDialogueNodeType::Condition,
         EDialogueNodeType::Event,
-        EDialogueNodeType::Wait
+        EDialogueNodeType::Wait,
+        EDialogueNodeType::Random,
+        EDialogueNodeType::Jump,
+        EDialogueNodeType::Sequence,
+        EDialogueNodeType::SubDialogue,
+        EDialogueNodeType::Camera,
+        EDialogueNodeType::Animation
     };
 }
 
