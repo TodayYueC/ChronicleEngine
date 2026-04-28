@@ -1,6 +1,6 @@
 # Chronicle Presentation Workflow
 
-M4 adds a source-first presentation layer for UI, camera, voice, skip, auto, backlog, and rollback flows.
+M4 added the source-first presentation controller. The v0.7 pass adds a ready-to-use UMG default HUD while keeping the workflow source-first and friendly to source control.
 
 ## Core Classes
 
@@ -14,6 +14,13 @@ M4 adds a source-first presentation layer for UI, camera, voice, skip, auto, bac
   - Implements `IDialoguePresenter`.
   - Exposes Blueprint events for dialogue started/ended, line started/completed, choices, waiting-for-input, rollback, and presentation events.
   - Can drive `TickPresentation` for auto and skip behavior.
+- `UChronicleDialogueDefaultWidget`
+  - Concrete source-built dialogue HUD.
+  - Can auto-build a default layout at runtime.
+  - Tracks speaker text, typewriter reveal state, choices, local backlog, Auto, Skip, and Backlog visibility.
+  - Provides portrait and full-body image slots for project-specific speaker art.
+- `UChronicleDialogueChoiceButton`
+  - Indexed UMG button used by the default HUD for choice forwarding.
 - `AChronicleDialogueDemoActor`
   - Builds a small runtime demo tree in source.
   - Demonstrates a camera cue, voiced lines, choices, and presentation-controller startup without requiring binary sample assets.
@@ -31,6 +38,16 @@ UChronicleDialoguePresentationController* Presentation = Subsystem->GetPresentat
 `GetPresentationController()` returns a controller bound to the current runner.
 
 ## UI Flow
+
+### Default Widget
+
+1. Create a Widget Blueprint derived from `UChronicleDialogueDefaultWidget`, or instantiate the C++ class directly.
+2. Bind it to `GetPresentationController()`.
+3. Optionally turn off `bBuildDefaultLayout` and bind your own named widgets to the optional fields.
+
+The built-in layout includes speaker text, dialogue text, choice list, Backlog scroll box, Advance, Auto, Skip, Backlog, and Back buttons.
+
+### Custom Widget
 
 1. Create a Blueprint widget derived from `UChronicleDialogueWidget`.
 2. Bind it to `GetPresentationController()`.
@@ -79,3 +96,4 @@ M4 automation covers:
 - Choice forwarding through the presentation controller.
 - Camera cue and payload preservation.
 - Voice ID preservation on presented lines.
+- Default widget state for typewriter reveal, local backlog, choice forwarding, Auto, and Skip controls.

@@ -30,14 +30,16 @@ Status: complete for the v0.6 editor workflow pass.
 
 ## M4 Presentation
 
-Status: complete for the planned source-first M4 scope.
+Status: complete for the v0.7 default UMG source-widget pass.
 
 - Added `UChronicleDialoguePresentationController` as the UI-facing orchestration layer over `UDialogueRunner`.
 - Added `UChronicleDialogueWidget`, an abstract UMG base widget that implements `IDialoguePresenter` and exposes Blueprint events/actions.
+- Added `UChronicleDialogueDefaultWidget`, a concrete source-built dialogue HUD with typewriter reveal state, choice buttons, Backlog display, Advance, Auto, Skip, Backlog, Back controls, and portrait/full-body image slots.
+- Added `UChronicleDialogueChoiceButton` for indexed choice forwarding from generated UMG buttons.
 - Added auto advance, skip mode, presentation backlog, rollback sync, choice forwarding, and line-completion presenter hooks.
 - Added camera and audio presentation cue tags through `Chronicle.Camera.*` and `Chronicle.Audio.*`.
 - Added `AChronicleDialogueDemoActor`, which builds and starts a small runtime demo tree without tracking binary sample assets.
-- Added automation coverage for backlog, auto, skip, rollback, choice forwarding, camera cue payloads, and voice IDs.
+- Added automation coverage for backlog, auto, skip, rollback, choice forwarding, camera cue payloads, voice IDs, and default widget state.
 - Remaining release polish moves to M5: packaged demo content, optional binary showcase map, and broader compatibility hardening.
 
 ## M5 Hardening And Release
@@ -51,7 +53,7 @@ Status: current release-candidate hardening pass.
 - Added `UDialogueTrigger` assets and `UDialogueTriggerManager` runtime activation flow with priority selection, condition checks, cooldowns, one-shot consumption, tag activation, and subsystem access.
 - Condition expressions compile once into a cached AST, with per-dialogue condition result caching and variable-name tag caching.
 - Rollback mementos are limited to player-visible pause points instead of internal node hops.
-- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.0507ms` after warm-up.
+- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.0482ms` after warm-up.
 - Added release notes, release checklist, and a packaging script.
 - UE 5.7 smoke and UE 5.3 BuildPlugin packaging pass for this release-candidate pass.
 - Remaining before public release: optionally tag `v0.5.0` and attach the package to a GitHub Release.

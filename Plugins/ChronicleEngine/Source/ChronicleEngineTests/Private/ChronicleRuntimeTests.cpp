@@ -4,6 +4,7 @@
 #include "Data/DialogueTree.h"
 #include "Data/DialogueTrigger.h"
 #include "GameplayTagsManager.h"
+#include "Presentation/ChronicleDialogueDefaultWidget.h"
 #include "Presentation/ChronicleDialoguePresentationController.h"
 #include "Runtime/DialogueConditionEvaluator.h"
 #include "Runtime/DialogueRunner.h"
@@ -655,6 +656,82 @@ bool FChroniclePresentationSkipChoiceCueTest::RunTest(const FString& Parameters)
 
     Controller->SelectChoice(1);
     TestEqual(TEXT("Choice selection forwards to selected branch"), Controller->GetLastLine().Text.ToString(), FString(TEXT("short result")));
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChroniclePresentationDefaultWidgetTest, "Chronicle.Presentation.DefaultWidgetState", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChroniclePresentationDefaultWidgetTest::RunTest(const FString& Parameters)
+{
+    UDialogueRunner* Runner = NewObject<UDialogueRunner>();
+    Runner->Initialize(nullptr);
+
+    UChronicleDialoguePresentationController* Controller = NewObject<UChronicleDialoguePresentationController>();
+    Controller->BindRunner(Runner);
+
+    UChronicleDialogueDefaultWidget* Widget = NewObject<UChronicleDialogueDefaultWidget>();
+    Widget->BindPresentationController(Controller);
+
+    UDialogueTree* TwoLineTree = ChronicleTests::MakeTwoLineTree();
+    Controller->StartDialogue(TwoLineTree);
+
+    TestFalse(TEXT("Default widget starts typewriter lines unrevealed"), Widget->IsCurrentLineFullyRevealed());
+    TestEqual(TEXT("Default widget stores first line in local backlog"), Widget->GetLocalBacklog().Num(), 1);
+    TestTrue(TEXT("Default widget exposes speaker text"), Widget->GetDisplayedSpeakerText().ToString().Contains(TEXT("Chronicle.Speaker.Alice")));
+
+    Widget->RevealCurrentLineInstantly();
+    TestTrue(TEXT("Default widget reveals current line on request"), Widget->IsCurrentLineFullyRevealed());
+    TestEqual(TEXT("Default widget displays revealed first line"), Widget->GetDisplayedLineText().ToString(), FString(TEXT("first")));
+
+    Widget->SetBacklogVisible(true);
+    TestTrue(TEXT("Default widget tracks backlog visibility"), Widget->IsBacklogVisible());
+
+    Controller->Advance();
+    Widget->RevealCurrentLineInstantly();
+    TestEqual(TEXT("Default widget displays second line after controller advance"), Widget->GetDisplayedLineText().ToString(), FString(TEXT("second")));
+    TestEqual(TEXT("Default widget local backlog tracks both lines"), Widget->GetLocalBacklog().Num(), 2);
+
+    UDialogueTree* ChoiceTree = NewObject<UDialogueTree>();
+    ChoiceTree->TreeGuid = FGuid::NewGuid();
+    const FGuid RootGuid = ChronicleTests::AddNode(ChoiceTree, EDialogueNodeType::Root);
+    const FGuid ChoiceGuid = ChronicleTests::AddNode(ChoiceTree, EDialogueNodeType::Choice);
+    const FGuid LeftGuid = ChronicleTests::AddNode(ChoiceTree, EDialogueNodeType::Speech);
+    const FGuid RightGuid = ChronicleTests::AddNode(ChoiceTree, EDialogueNodeType::Speech);
+    ChoiceTree->RootNodeGuid = RootGuid;
+
+    FDialogueChoice LeftChoice;
+    LeftChoice.Text = FText::FromString(TEXT("Left"));
+    ChoiceTree->FindNodeMutable(ChoiceGuid)->Choices.Add(LeftChoice);
+
+    FDialogueChoice RightChoice;
+    RightChoice.Text = FText::FromString(TEXT("Right"));
+    ChoiceTree->FindNodeMutable(ChoiceGuid)->Choices.Add(RightChoice);
+
+    FDialogueLine LeftLine;
+    LeftLine.LineID = TEXT("LeftLine");
+    LeftLine.Text = FText::FromString(TEXT("left result"));
+    ChoiceTree->FindNodeMutable(LeftGuid)->Lines.Add(LeftLine);
+
+    FDialogueLine RightLine;
+    RightLine.LineID = TEXT("RightLine");
+    RightLine.Text = FText::FromString(TEXT("right result"));
+    ChoiceTree->FindNodeMutable(RightGuid)->Lines.Add(RightLine);
+
+    ChronicleTests::AddEdge(ChoiceTree, RootGuid, ChoiceGuid);
+    ChronicleTests::AddEdge(ChoiceTree, ChoiceGuid, LeftGuid, 0);
+    ChronicleTests::AddEdge(ChoiceTree, ChoiceGuid, RightGuid, 1);
+
+    Controller->StartDialogue(ChoiceTree);
+    TestEqual(TEXT("Default widget tracks presented choices"), Widget->GetVisibleChoiceCount(), 2);
+
+    Widget->SelectDialogueChoice(1);
+    Widget->RevealCurrentLineInstantly();
+    TestEqual(TEXT("Default widget forwards choice selection through controller"), Widget->GetDisplayedLineText().ToString(), FString(TEXT("right result")));
+
+    Widget->SetAutoAdvanceEnabled(true, 0.2f);
+    TestTrue(TEXT("Default widget toggles auto through the controller"), Controller->IsAutoAdvanceEnabled());
+    Widget->SetSkipModeEnabled(true);
+    TestTrue(TEXT("Default widget toggles skip through the controller"), Controller->IsSkipModeEnabled());
 
     return true;
 }

@@ -2,7 +2,7 @@
 
 Chronicle Engine is an MIT-licensed Unreal Engine 5 plugin for JRPG-style dialogue and narrative systems. It provides a runtime dialogue runner, asset import/export pipeline, native editor graph workflow, UMG presentation foundation, automated tests, and release packaging support.
 
-- Current development version: `v0.6.0-dev`
+- Current development version: `v0.7.0-dev`
 - Latest packaged release: `v0.5.0`
 - Primary engine baseline: UE 5.3
 - Compatibility smoke target: UE 5.7
@@ -30,6 +30,7 @@ Main features:
 - Native Slate graph editor, full PRD node creation, search, copy/paste/duplicate/delete, breakpoints, soft locks, and debug snapshots.
 - `UChronicleDialoguePresentationController` for UI-facing flow control.
 - `UChronicleDialogueWidget` as the default UMG base class.
+- `UChronicleDialogueDefaultWidget` as a ready-to-use source-built dialogue HUD.
 - Auto, Skip, Backlog, Rollback, and Choice forwarding.
 - Camera / Animation / Audio presentation cues.
 - Dialogue Trigger assets and `UDialogueTriggerManager` activation flow.
@@ -56,7 +57,7 @@ YourProject/Plugins/ChronicleEngine
 2. Open `ChronicleHost.uproject` with UE 5.3.
 3. Build `ChronicleHostEditor`.
 4. Test the plugin in the host project, or copy `Plugins/ChronicleEngine` into another UE project.
-5. Use this option for the latest development version, currently `v0.6.0-dev`.
+5. Use this option for the latest development version, currently `v0.7.0-dev`.
 
 ## 3. Build And Test
 
@@ -75,10 +76,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 Current verification status:
 
 - UE 5.3 build passes.
-- UE 5.3 `Chronicle` automation tests pass: 28/28.
+- UE 5.3 `Chronicle` automation tests pass: 29/29.
 - UE 5.7 build smoke passes.
 - UE 5.3 BuildPlugin packaging passes.
-- 100-node condition traversal budget: `0.25ms`; latest warm-path run: `0.0507ms`.
+- 100-node condition traversal budget: `0.25ms`; latest warm-path run: `0.0482ms`.
 
 ## 4. Create Core Assets
 
@@ -307,7 +308,24 @@ The controller handles:
 - Rollback
 - Camera / Animation / Audio event forwarding
 
-### Create A UMG Widget
+### Use The Default UMG Widget
+
+For a source-only default HUD, create a Widget Blueprint with parent class `UChronicleDialogueDefaultWidget`, or instantiate that class directly from C++. The default widget can build its own runtime layout and already includes:
+
+- speaker name text
+- dialogue text with typewriter reveal state
+- choice buttons
+- Backlog panel
+- Advance, Auto, Skip, Backlog, and Back buttons
+- portrait and full-body image slots for project-specific speaker art
+
+Bind it to the presentation controller:
+
+```cpp
+DefaultWidget->BindPresentationController(Presentation);
+```
+
+### Create A Custom UMG Widget
 
 1. Create a Widget Blueprint.
 2. Set its parent class to `UChronicleDialogueWidget`.
@@ -501,6 +519,7 @@ Call `RequestRollback` on the Presentation Controller instead of bypassing it an
 - 原生 Slate 图编辑器、完整 PRD 节点创建、节点搜索、复制/粘贴/复制副本/删除、断点、软锁、调试快照。
 - `UChronicleDialoguePresentationController` 表现层控制器。
 - `UChronicleDialogueWidget` UMG 基类。
+- `UChronicleDialogueDefaultWidget` 可直接使用的源码 Dialogue HUD。
 - Auto、Skip、Backlog、Rollback、Choice 转发。
 - Camera / Animation / Audio 表现 cue。
 - Dialogue Trigger 资产和 `UDialogueTriggerManager` 激活流程。
@@ -527,7 +546,7 @@ YourProject/Plugins/ChronicleEngine
 2. 用 UE 5.3 打开 `ChronicleHost.uproject`。
 3. 编译 `ChronicleHostEditor`。
 4. 在宿主项目中测试插件或把 `Plugins/ChronicleEngine` 复制到其他 UE 项目。
-5. 如需最新开发版，请使用此方式；当前开发版为 `v0.6.0-dev`。
+5. 如需最新开发版，请使用此方式；当前开发版为 `v0.7.0-dev`。
 
 ## 3. 编译与测试
 
@@ -546,10 +565,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 当前验证状态：
 
 - UE 5.3 编译通过。
-- UE 5.3 `Chronicle` 自动化测试 28/28 通过。
+- UE 5.3 `Chronicle` 自动化测试 29/29 通过。
 - UE 5.7 编译冒烟通过。
 - UE 5.3 BuildPlugin 打包通过。
-- 100 节点条件遍历测试预算：`0.25ms`；最新热路径实测 `0.0507ms`。
+- 100 节点条件遍历测试预算：`0.25ms`；最新热路径实测 `0.0482ms`。
 
 ## 4. 创建基础数据资产
 
@@ -778,7 +797,24 @@ UChronicleDialoguePresentationController* Presentation = Subsystem->GetPresentat
 - 执行 Rollback。
 - 转发 Camera / Animation / Audio 事件。
 
-### 创建 UMG Widget
+### 使用默认 UMG Widget
+
+如果需要源码默认 HUD，可以创建一个父类为 `UChronicleDialogueDefaultWidget` 的 Widget Blueprint，也可以直接从 C++ 实例化这个类。默认 Widget 会自动构建基础布局，并包含：
+
+- 说话人文本
+- 带打字机状态的对白文本
+- 选项按钮
+- Backlog 面板
+- Advance、Auto、Skip、Backlog、Back 按钮
+- 头像和立绘图片槽，供项目接入自己的角色美术
+
+绑定到表现层控制器：
+
+```cpp
+DefaultWidget->BindPresentationController(Presentation);
+```
+
+### 创建自定义 UMG Widget
 
 1. 创建 Widget Blueprint。
 2. 父类选择 `UChronicleDialogueWidget`。
