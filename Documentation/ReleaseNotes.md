@@ -1,5 +1,27 @@
 # Chronicle Engine Release Notes
 
+## 0.9.0-dev Integration And Audit Pass
+
+This development pass adds source-first project integration examples and production audit reporting.
+
+### Highlights
+
+- Added standard Gameplay Tags for quest, game-state, actor animation, battle encounter, and scene-load dialogue events.
+- Added `UChronicleExampleQuestAdapter`, a Runtime sample that binds to `UDialogueRunner::OnDialogueEvent`.
+- The adapter rebroadcasts quest start/update/complete, game-state change, actor animation, battle encounter, scene load, and unhandled dialogue events.
+- The adapter exposes `PushExternalVariable` for project systems that need to feed runner variables.
+- Added `UChronicleDialogueAuditLibrary` in the Editor module.
+- Audit reports include node/edge counts, speech line counts, choice counts, word counts, speaker stats, condition/payload variable usage, broken edges, unreachable nodes, and validation issue totals.
+- Added JSON export for audit reports.
+- Added automation coverage for the example quest adapter and audit reports.
+
+### Verification
+
+- UE 5.3 editor build: passed.
+- UE 5.3 `Chronicle` automation suite: 32 tests passed.
+- UE 5.7 editor build smoke: passed.
+- 100-node condition traversal recorded `0.0986ms`.
+
 ## 0.8.0-dev Localization Pipeline Pass
 
 This development pass adds the first complete localization gather/import workflow.

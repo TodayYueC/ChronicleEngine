@@ -37,6 +37,18 @@ public:
     int32 TriggerRejectedCount = 0;
 
     UPROPERTY()
+    int32 QuestAdapterEventCount = 0;
+
+    UPROPERTY()
+    int32 GenericAdapterEventCount = 0;
+
+    UPROPERTY()
+    FGameplayTag LastAdapterQuestTag;
+
+    UPROPERTY()
+    FDialogueEventData LastAdapterEvent;
+
+    UPROPERTY()
     FDialogueLine LastLine;
 
     UPROPERTY()
@@ -100,5 +112,20 @@ public:
     {
         ++TriggerRejectedCount;
         LastTriggerRejectReason = Reason;
+    }
+
+    UFUNCTION()
+    void HandleQuestAdapterEvent(FGameplayTag QuestTag, const FDialogueEventData& EventData)
+    {
+        ++QuestAdapterEventCount;
+        LastAdapterQuestTag = QuestTag;
+        LastAdapterEvent = EventData;
+    }
+
+    UFUNCTION()
+    void HandleGenericAdapterEvent(const FDialogueEventData& EventData)
+    {
+        ++GenericAdapterEventCount;
+        LastAdapterEvent = EventData;
     }
 };

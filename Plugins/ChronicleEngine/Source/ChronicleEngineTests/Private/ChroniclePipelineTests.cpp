@@ -1,5 +1,6 @@
 #include "Misc/AutomationTest.h"
 
+#include "Asset/ChronicleDialogueAuditLibrary.h"
 #include "Asset/ChronicleDialogueJsonLibrary.h"
 #include "Data/DialogueDatabase.h"
 #include "Data/DialogueTree.h"
@@ -215,6 +216,119 @@ bool FChronicleTreeValidationTest::RunTest(const FString& Parameters)
     {
         return Issue.Severity == EChronicleDialogueValidationSeverity::Error;
     }));
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleDialogueAuditReportTest, "Chronicle.Pipeline.Audit.Report", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleDialogueAuditReportTest::RunTest(const FString& Parameters)
+{
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+
+    FDialogueNode RootNode;
+    RootNode.NodeGuid = FGuid::NewGuid();
+    RootNode.NodeType = EDialogueNodeType::Root;
+    Tree->RootNodeGuid = RootNode.NodeGuid;
+
+    FDialogueNode SpeechNode;
+    SpeechNode.NodeGuid = FGuid::NewGuid();
+    SpeechNode.NodeType = EDialogueNodeType::Speech;
+    FDialogueLine FirstLine;
+    FirstLine.LineID = TEXT("Audit_001");
+    FirstLine.SpeakerTag = ChroniclePipelineTests::Tag(TEXT("Chronicle.Speaker.Alice"));
+    FirstLine.Text = FText::FromString(TEXT("Hello audit world"));
+    SpeechNode.Lines.Add(FirstLine);
+    FDialogueLine SecondLine;
+    SecondLine.LineID = TEXT("Audit_002");
+    SecondLine.SpeakerTag = ChroniclePipelineTests::Tag(TEXT("Chronicle.Speaker.Alice"));
+    SecondLine.Text = FText::FromString(TEXT("Done now"));
+    SpeechNode.Lines.Add(SecondLine);
+
+    FDialogueNode ChoiceNode;
+    ChoiceNode.NodeGuid = FGuid::NewGuid();
+    ChoiceNode.NodeType = EDialogueNodeType::Choice;
+    FDialogueChoice VisibleChoice;
+    VisibleChoice.Text = FText::FromString(TEXT("Continue"));
+    VisibleChoice.VisibilityCondition = TEXT("Chronicle.Variable.Score >= 10");
+    ChoiceNode.Choices.Add(VisibleChoice);
+
+    FDialogueNode EventNode;
+    EventNode.NodeGuid = FGuid::NewGuid();
+    EventNode.NodeType = EDialogueNodeType::Event;
+    EventNode.EventTag = ChroniclePipelineTests::Tag(TEXT("Chronicle.Event.Quest.Update"));
+    EventNode.EventPayload.Add(TEXT("ScoreVariable"), TEXT("Chronicle.Variable.Score"));
+
+    FDialogueNode UnreachableNode;
+    UnreachableNode.NodeGuid = FGuid::NewGuid();
+    UnreachableNode.NodeType = EDialogueNodeType::Speech;
+
+    Tree->Nodes.Add(RootNode);
+    Tree->Nodes.Add(SpeechNode);
+    Tree->Nodes.Add(ChoiceNode);
+    Tree->Nodes.Add(EventNode);
+    Tree->Nodes.Add(UnreachableNode);
+
+    FDialogueEdge RootToSpeech;
+    RootToSpeech.FromNodeGuid = RootNode.NodeGuid;
+    RootToSpeech.ToNodeGuid = SpeechNode.NodeGuid;
+    Tree->Edges.Add(RootToSpeech);
+
+    FDialogueEdge SpeechToChoice;
+    SpeechToChoice.FromNodeGuid = SpeechNode.NodeGuid;
+    SpeechToChoice.ToNodeGuid = ChoiceNode.NodeGuid;
+    SpeechToChoice.ConditionExpression = TEXT("Chronicle.Variable.Flag == true");
+    Tree->Edges.Add(SpeechToChoice);
+
+    FDialogueEdge ChoiceToEvent;
+    ChoiceToEvent.FromNodeGuid = ChoiceNode.NodeGuid;
+    ChoiceToEvent.ToNodeGuid = EventNode.NodeGuid;
+    Tree->Edges.Add(ChoiceToEvent);
+
+    FDialogueEdge BrokenEdge;
+    BrokenEdge.FromNodeGuid = RootNode.NodeGuid;
+    BrokenEdge.ToNodeGuid = FGuid::NewGuid();
+    Tree->Edges.Add(BrokenEdge);
+
+    FChronicleDialogueAuditReport Report;
+    FString Error;
+    TestTrue(TEXT("Audit report builds even when validation finds issues"), UChronicleDialogueAuditLibrary::BuildDialogueAuditReport(Tree, Report, Error));
+    TestEqual(TEXT("Audit counts nodes"), Report.NodeCount, 5);
+    TestEqual(TEXT("Audit counts edges"), Report.EdgeCount, 4);
+    TestEqual(TEXT("Audit counts speech lines"), Report.SpeechLineCount, 2);
+    TestEqual(TEXT("Audit counts choices"), Report.ChoiceCount, 1);
+    TestEqual(TEXT("Audit counts words"), Report.WordCount, 5);
+    TestEqual(TEXT("Audit counts broken edges"), Report.BrokenEdgeCount, 1);
+    TestEqual(TEXT("Audit counts unreachable nodes"), Report.UnreachableNodeCount, 1);
+    TestTrue(TEXT("Audit includes validation errors"), Report.ErrorCount > 0);
+    TestTrue(TEXT("Audit includes validation warnings"), Report.WarningCount > 0);
+
+    const FChronicleDialogueSpeakerLineStats* AliceStats = Report.SpeakerLineStats.FindByPredicate([](const FChronicleDialogueSpeakerLineStats& Stats)
+    {
+        return Stats.SpeakerTag == ChroniclePipelineTests::Tag(TEXT("Chronicle.Speaker.Alice"));
+    });
+    TestNotNull(TEXT("Audit includes speaker stats"), AliceStats);
+    if (AliceStats)
+    {
+        TestEqual(TEXT("Speaker line count is tracked"), AliceStats->LineCount, 2);
+        TestEqual(TEXT("Speaker word count is tracked"), AliceStats->WordCount, 5);
+    }
+
+    const FChronicleDialogueVariableUsage* ScoreUsage = Report.VariableUsages.FindByPredicate([](const FChronicleDialogueVariableUsage& Usage)
+    {
+        return Usage.VariableName == TEXT("Chronicle.Variable.Score");
+    });
+    TestNotNull(TEXT("Audit includes score variable usage"), ScoreUsage);
+    if (ScoreUsage)
+    {
+        TestEqual(TEXT("Score appears in one condition field"), ScoreUsage->ConditionUsageCount, 1);
+        TestEqual(TEXT("Score appears in one event payload"), ScoreUsage->EventPayloadUsageCount, 1);
+    }
+
+    FString Json;
+    TestTrue(TEXT("Audit report exports as JSON"), UChronicleDialogueAuditLibrary::ExportDialogueAuditReportToJsonString(Report, Json, Error));
+    TestTrue(TEXT("Audit JSON includes node count"), Json.Contains(TEXT("NodeCount")));
+    TestTrue(TEXT("Audit JSON includes variable usage"), Json.Contains(TEXT("Chronicle.Variable.Score")));
 
     return true;
 }

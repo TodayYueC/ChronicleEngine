@@ -11,6 +11,7 @@
 #include "Runtime/DialogueTextParser.h"
 #include "Runtime/DialogueTriggerManager.h"
 #include "Runtime/VariableBank.h"
+#include "Samples/ChronicleExampleQuestAdapter.h"
 #include "HAL/PlatformTime.h"
 
 namespace ChronicleTests
@@ -303,6 +304,60 @@ bool FChronicleRunnerEventTest::RunTest(const FString& Parameters)
     Runner->NotifyEventComplete(ChronicleTests::Tag(TEXT("Chronicle.Event.Async")));
     TestEqual(TEXT("Event completion advances"), Listener->LastLine.Text.ToString(), FString(TEXT("after")));
 
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleExampleQuestAdapterTest, "Chronicle.Runtime.Integration.ExampleQuestAdapter", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleExampleQuestAdapterTest::RunTest(const FString& Parameters)
+{
+    UChronicleTestListener* Listener = nullptr;
+    UDialogueRunner* Runner = ChronicleTests::MakeRunner(Listener);
+
+    UChronicleExampleQuestAdapter* Adapter = NewObject<UChronicleExampleQuestAdapter>();
+    Adapter->BindToRunner(Runner);
+    Adapter->OnQuestStarted.AddDynamic(Listener, &UChronicleTestListener::HandleQuestAdapterEvent);
+
+    const FGameplayTag QuestTag = ChronicleTests::Tag(TEXT("Chronicle.Quest.Main"));
+    const FGameplayTag ScoreTag = ChronicleTests::Tag(TEXT("Chronicle.Variable.Score"));
+    TestTrue(TEXT("Quest tag exists"), QuestTag.IsValid());
+    TestTrue(TEXT("Score tag exists"), ScoreTag.IsValid());
+
+    Adapter->PushExternalVariable(ScoreTag, FVariableValue::MakeInt(12));
+    bool bFound = false;
+    const FVariableValue ScoreValue = Runner->GetVariable(ScoreTag, bFound);
+    TestTrue(TEXT("Adapter can push external variables into the runner"), bFound);
+    TestEqual(TEXT("Adapter variable value round-trips"), ScoreValue.IntValue, 12);
+
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+    const FGuid RootGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Root);
+    const FGuid EventGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Event);
+    const FGuid SpeechGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    Tree->RootNodeGuid = RootGuid;
+
+    FDialogueNode* EventNode = Tree->FindNodeMutable(EventGuid);
+    EventNode->EventTag = ChronicleTests::Tag(TEXT("Chronicle.Event.Quest.Start"));
+    EventNode->EventPayload.Add(TEXT("QuestTag"), QuestTag.ToString());
+    EventNode->EventPayload.Add(TEXT("Source"), TEXT("Dialogue"));
+
+    FDialogueLine Line;
+    Line.LineID = TEXT("QuestStarted");
+    Line.Text = FText::FromString(TEXT("quest started"));
+    Tree->FindNodeMutable(SpeechGuid)->Lines.Add(Line);
+
+    ChronicleTests::AddEdge(Tree, RootGuid, EventGuid);
+    ChronicleTests::AddEdge(Tree, EventGuid, SpeechGuid);
+
+    Runner->StartDialogue(Tree);
+
+    TestEqual(TEXT("Adapter handles one event"), Adapter->GetHandledEventCount(), 1);
+    TestEqual(TEXT("Quest start delegate fired"), Listener->QuestAdapterEventCount, 1);
+    TestEqual(TEXT("Adapter resolves quest payload tag"), Adapter->GetLastQuestTag(), QuestTag);
+    TestEqual(TEXT("Listener receives quest payload tag"), Listener->LastAdapterQuestTag, QuestTag);
+    TestEqual(TEXT("Unhandled adapter delegate is not used for known quest events"), Listener->GenericAdapterEventCount, 0);
+    TestEqual(TEXT("Dialogue continues after synchronous quest event"), Listener->LastLine.Text.ToString(), FString(TEXT("quest started")));
+
+    Adapter->UnbindFromRunner();
     return true;
 }
 

@@ -10,7 +10,7 @@ Acceptance:
 
 ## M2 Asset Pipeline
 
-Status: complete for the v0.8 localization pipeline pass.
+Status: complete for the v0.9 audit pipeline pass.
 
 - Stable JSON import/export with schema marker and deterministic node/edge ordering.
 - CSV export/import for localization and writer text handoff.
@@ -18,7 +18,8 @@ Status: complete for the v0.8 localization pipeline pass.
 - Tree/database text gather helpers and localization CSV export/import by stable key.
 - Culture-specific voice-table lookup through `UDialogueDatabase::CultureVoiceTables` and `ResolveVoiceTableForCulture`.
 - Dialogue-tree validation for missing root, broken edges, duplicate node GUIDs, empty content warnings, and unreachable nodes.
-- Remaining pipeline polish moves to v0.9/v1.0: richer external spreadsheet templates and editor menu commands.
+- Dialogue audit reports through `UChronicleDialogueAuditLibrary`, covering node/edge counts, line/choice/word counts, speaker stats, variable usage, broken edges, unreachable nodes, and validation totals.
+- Remaining pipeline polish moves to v1.0: richer external spreadsheet templates and editor menu commands.
 
 ## M3 Editor Experience
 
@@ -60,3 +61,14 @@ Status: current release-candidate hardening pass.
 - Added release notes, release checklist, and a packaging script.
 - UE 5.7 smoke and UE 5.3 BuildPlugin packaging pass for this release-candidate pass.
 - Remaining before public release: optionally tag `v0.5.0` and attach the package to a GitHub Release.
+
+## M6 Integration And Audit
+
+Status: current v0.9 integration pass.
+
+- Added standard dialogue event tags for quest, game-state, actor animation, battle encounter, and scene load integration.
+- Added `UChronicleExampleQuestAdapter`, a source example that binds to `UDialogueRunner::OnDialogueEvent` and rebroadcasts project-facing quest/state delegates.
+- Added a variable push helper on the example adapter so outside systems can feed runner variables without owning the runner directly.
+- Added editor audit reports for production review, localization readiness, and release checks.
+- Added automation coverage for the integration adapter and audit report JSON export.
+- UE 5.3 automation now covers 32 Chronicle tests; latest 100-node condition traversal run recorded `0.0986ms`.

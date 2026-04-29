@@ -77,3 +77,28 @@ The validation helper reports:
 - event nodes without an event tag
 
 Validation returns `false` when any error-level issue is present. Warning-level issues are reported but do not fail validation.
+
+## Audit Reports
+
+The v0.9 audit pass adds `UChronicleDialogueAuditLibrary` for production checks before recording, localization handoff, or release.
+
+Blueprint/C++ helpers:
+
+- `BuildDialogueAuditReport`
+- `ExportDialogueAuditReportToJsonString`
+- `ExportDialogueAuditReportForTreeToJsonString`
+
+The report includes:
+
+- node and edge counts
+- speech line count
+- choice count
+- total word count
+- per-speaker line and word counts
+- variable references found in conditions and event payloads
+- broken edge count
+- unreachable node count
+- warning and error totals from the validation helper
+- the full validation issue list
+
+Variable scanning currently recognizes Gameplay Tag style references such as `Chronicle.Variable.Score` in node conditions, choice visibility conditions, edge conditions, and event payload strings. This keeps the first audit pass source-control friendly and easy to export as JSON.
