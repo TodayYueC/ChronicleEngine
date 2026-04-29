@@ -1,7 +1,9 @@
 #include "Misc/AutomationTest.h"
 
 #include "Asset/ChronicleDialogueJsonLibrary.h"
+#include "Data/DialogueDatabase.h"
 #include "Data/DialogueTree.h"
+#include "Engine/DataTable.h"
 #include "GameplayTagsManager.h"
 
 namespace ChroniclePipelineTests
@@ -124,6 +126,71 @@ bool FChronicleCsvExportImportTest::RunTest(const FString& Parameters)
     {
         TestEqual(TEXT("Translated text is imported"), UpdatedNode->Lines[0].Text.ToString(), FString(TEXT("Greetings, traveler.")));
     }
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleLocalizationGatherImportTest, "Chronicle.Pipeline.Localization.GatherImport", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleLocalizationGatherImportTest::RunTest(const FString& Parameters)
+{
+    UDialogueTree* Tree = ChroniclePipelineTests::MakeTwoLineTree();
+
+    FDialogueNode* FirstSpeech = Tree->Nodes.FindByPredicate([](const FDialogueNode& Node)
+    {
+        return Node.NodeType == EDialogueNodeType::Speech && Node.Lines.Num() > 0 && Node.Lines[0].Text.ToString() == TEXT("Hello, traveler.");
+    });
+    TestNotNull(TEXT("First speech node exists"), FirstSpeech);
+    if (!FirstSpeech)
+    {
+        return false;
+    }
+
+    FirstSpeech->Lines[0].LineID = NAME_None;
+
+    int32 UpdatedLineIds = 0;
+    FString Error;
+    TestTrue(TEXT("Stable LineID generation succeeds"), UChronicleDialogueJsonLibrary::EnsureStableLineIds(Tree, UpdatedLineIds, Error));
+    TestEqual(TEXT("One missing LineID was generated"), UpdatedLineIds, 1);
+    TestFalse(TEXT("Generated LineID is valid"), FirstSpeech->Lines[0].LineID.IsNone());
+
+    TArray<FChronicleDialogueLocalizationEntry> Entries;
+    TestTrue(TEXT("Tree localization gather succeeds"), UChronicleDialogueJsonLibrary::GatherDialogueTextsFromTree(Tree, TEXT("Game.Dialogue"), TEXT("ja-JP"), Entries, Error));
+    TestEqual(TEXT("Gather emits one entry per dialogue line"), Entries.Num(), 2);
+    TestEqual(TEXT("Gather preserves namespace"), Entries[0].Namespace, FString(TEXT("Game.Dialogue")));
+    TestEqual(TEXT("Gather preserves culture"), Entries[0].Culture, FString(TEXT("ja-JP")));
+    TestTrue(TEXT("Gather uses line id as stable key"), Entries[0].Key == FirstSpeech->Lines[0].LineID || Entries[1].Key == FirstSpeech->Lines[0].LineID);
+
+    FString LocalizationCsv;
+    TestTrue(TEXT("Localization CSV export succeeds"), UChronicleDialogueJsonLibrary::ExportLocalizationCsvFromTree(Tree, TEXT("Game.Dialogue"), TEXT("ja-JP"), LocalizationCsv, Error));
+    TestTrue(TEXT("Localization CSV includes Key header"), LocalizationCsv.Contains(TEXT("Key")));
+    TestTrue(TEXT("Localization CSV includes context comments"), LocalizationCsv.Contains(TEXT("ContextComment")));
+
+    const FString TranslationCsv = FString::Printf(
+        TEXT("Namespace,Key,Culture,TreeGuid,NodeGuid,LineIndex,LineID,SpeakerTag,SourceText,TranslatedText,ContextComment\n")
+        TEXT("Game.Dialogue,%s,ja-JP,%s,%s,0,%s,Chronicle.Speaker.Alice,\"Hello, traveler.\",\"こんにちは、旅人。\",ManualTranslation\n"),
+        *FirstSpeech->Lines[0].LineID.ToString(),
+        *Tree->TreeGuid.ToString(EGuidFormats::DigitsWithHyphens),
+        *FirstSpeech->NodeGuid.ToString(EGuidFormats::DigitsWithHyphens),
+        *FirstSpeech->Lines[0].LineID.ToString());
+
+    TestTrue(TEXT("Localization CSV import succeeds"), UChronicleDialogueJsonLibrary::ImportLocalizationCsvToTree(Tree, TranslationCsv, Error));
+    TestEqual(TEXT("Translated text imported by stable key"), FirstSpeech->Lines[0].Text.ToString(), FString(TEXT("こんにちは、旅人。")));
+
+    UDialogueDatabase* Database = NewObject<UDialogueDatabase>();
+    Database->LocalizationSettings.Namespace = TEXT("Game.Dialogue");
+    Database->DialogueTrees.Add(Tree);
+
+    TArray<FChronicleDialogueLocalizationEntry> DatabaseEntries;
+    TestTrue(TEXT("Database localization gather succeeds"), UChronicleDialogueJsonLibrary::GatherDialogueTextsFromDatabase(Database, TEXT("ja-JP"), DatabaseEntries, Error));
+    TestEqual(TEXT("Database gather emits tree lines"), DatabaseEntries.Num(), 2);
+
+    UDataTable* DefaultVoiceTable = NewObject<UDataTable>();
+    UDataTable* JapaneseVoiceTable = NewObject<UDataTable>();
+    Database->VoiceTable = DefaultVoiceTable;
+    Database->CultureVoiceTables.Add(TEXT("ja-JP"), JapaneseVoiceTable);
+
+    TestTrue(TEXT("Culture-specific voice table resolves"), Database->ResolveVoiceTableForCulture(TEXT("ja-JP")) == JapaneseVoiceTable);
+    TestTrue(TEXT("Missing culture falls back to default voice table"), Database->ResolveVoiceTableForCulture(TEXT("en-US")) == DefaultVoiceTable);
 
     return true;
 }

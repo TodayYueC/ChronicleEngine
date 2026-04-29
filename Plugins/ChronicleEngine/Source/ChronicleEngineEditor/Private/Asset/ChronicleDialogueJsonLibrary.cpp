@@ -1,5 +1,6 @@
 #include "Asset/ChronicleDialogueJsonLibrary.h"
 
+#include "Data/DialogueDatabase.h"
 #include "Data/DialogueTree.h"
 #include "Dom/JsonObject.h"
 #include "GameplayTagsManager.h"
@@ -207,6 +208,63 @@ FGameplayTag TagFromString(const FString& TagText)
         return FGameplayTag();
     }
     return UGameplayTagsManager::Get().RequestGameplayTag(FName(*TagText), false);
+}
+
+FString GetDefaultDialogueNamespace(const FString& Namespace)
+{
+    const FString TrimmedNamespace = Namespace.TrimStartAndEnd();
+    return TrimmedNamespace.IsEmpty() ? FString(TEXT("Project.Dialogue")) : TrimmedNamespace;
+}
+
+FName MakeStableLineId(const UDialogueTree* Tree, const FDialogueNode& Node, int32 LineIndex)
+{
+    const FString TreeKey = Tree && Tree->TreeGuid.IsValid() ? Tree->TreeGuid.ToString(EGuidFormats::Digits) : FString(TEXT("Tree"));
+    const FString NodeKey = Node.NodeGuid.IsValid() ? Node.NodeGuid.ToString(EGuidFormats::Digits) : FString(TEXT("Node"));
+    return FName(*FString::Printf(TEXT("DLG_%s_%s_%03d"), *TreeKey.Left(8), *NodeKey.Left(8), LineIndex));
+}
+
+FString MakeLocalizationContext(const UDialogueTree* Tree, const FDialogueNode& Node, int32 LineIndex, const FDialogueLine& Line)
+{
+    return FString::Printf(
+        TEXT("TreeGuid=%s; NodeGuid=%s; LineIndex=%d; Speaker=%s; LineID=%s"),
+        Tree ? *Tree->TreeGuid.ToString(EGuidFormats::DigitsWithHyphens) : TEXT(""),
+        *Node.NodeGuid.ToString(EGuidFormats::DigitsWithHyphens),
+        LineIndex,
+        *Line.SpeakerTag.ToString(),
+        *Line.LineID.ToString());
+}
+
+FDialogueLine* FindLineByLocalizationKey(UDialogueTree* Tree, const FString& Key, const FGuid& FallbackNodeGuid, int32 FallbackLineIndex)
+{
+    if (!Tree)
+    {
+        return nullptr;
+    }
+
+    const FName KeyName(*Key.TrimStartAndEnd());
+    if (!KeyName.IsNone())
+    {
+        for (FDialogueNode& Node : Tree->Nodes)
+        {
+            for (FDialogueLine& Line : Node.Lines)
+            {
+                if (Line.LineID == KeyName)
+                {
+                    return &Line;
+                }
+            }
+        }
+    }
+
+    if (FDialogueNode* Node = Tree->FindNodeMutable(FallbackNodeGuid))
+    {
+        if (Node->Lines.IsValidIndex(FallbackLineIndex))
+        {
+            return &Node->Lines[FallbackLineIndex];
+        }
+    }
+
+    return nullptr;
 }
 }
 
@@ -572,6 +630,258 @@ bool UChronicleDialogueJsonLibrary::ImportDialogueLinesFromCsvFile(UDialogueTree
     }
 
     return ImportDialogueLinesFromCsvString(Tree, Csv, OutError);
+}
+
+bool UChronicleDialogueJsonLibrary::EnsureStableLineIds(UDialogueTree* Tree, int32& OutUpdatedCount, FString& OutError)
+{
+    OutUpdatedCount = 0;
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    Tree->EnsureStableGuids();
+    TSet<FName> SeenLineIds;
+    Tree->Modify();
+
+    for (FDialogueNode& Node : Tree->Nodes)
+    {
+        for (int32 LineIndex = 0; LineIndex < Node.Lines.Num(); ++LineIndex)
+        {
+            FDialogueLine& Line = Node.Lines[LineIndex];
+            if (!Line.LineID.IsNone() && !SeenLineIds.Contains(Line.LineID))
+            {
+                SeenLineIds.Add(Line.LineID);
+                continue;
+            }
+
+            Line.LineID = MakeStableLineId(Tree, Node, LineIndex);
+            SeenLineIds.Add(Line.LineID);
+            ++OutUpdatedCount;
+        }
+    }
+
+    if (OutUpdatedCount > 0)
+    {
+        Tree->MarkPackageDirty();
+    }
+
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueJsonLibrary::GatherDialogueTextsFromTree(UDialogueTree* Tree, const FString& Namespace, const FString& Culture, TArray<FChronicleDialogueLocalizationEntry>& OutEntries, FString& OutError)
+{
+    OutEntries.Reset();
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    int32 UpdatedLineIds = 0;
+    if (!EnsureStableLineIds(Tree, UpdatedLineIds, OutError))
+    {
+        return false;
+    }
+
+    const FString StableNamespace = GetDefaultDialogueNamespace(Namespace);
+    const FString StableCulture = Culture.TrimStartAndEnd();
+    for (const FDialogueNode& Node : GetSortedNodes(Tree))
+    {
+        if (Node.NodeType != EDialogueNodeType::Speech)
+        {
+            continue;
+        }
+
+        for (int32 LineIndex = 0; LineIndex < Node.Lines.Num(); ++LineIndex)
+        {
+            const FDialogueLine& Line = Node.Lines[LineIndex];
+
+            FChronicleDialogueLocalizationEntry Entry;
+            Entry.Namespace = StableNamespace;
+            Entry.Key = Line.LineID;
+            Entry.Culture = StableCulture;
+            Entry.TreeGuid = Tree->TreeGuid;
+            Entry.NodeGuid = Node.NodeGuid;
+            Entry.LineIndex = LineIndex;
+            Entry.LineID = Line.LineID;
+            Entry.SpeakerTag = Line.SpeakerTag;
+            Entry.SourceText = Line.Text;
+            Entry.ContextComment = MakeLocalizationContext(Tree, Node, LineIndex, Line);
+            OutEntries.Add(Entry);
+        }
+    }
+
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueJsonLibrary::GatherDialogueTextsFromDatabase(UDialogueDatabase* Database, const FString& Culture, TArray<FChronicleDialogueLocalizationEntry>& OutEntries, FString& OutError)
+{
+    OutEntries.Reset();
+    if (!Database)
+    {
+        OutError = TEXT("No dialogue database supplied.");
+        return false;
+    }
+
+    const FString Namespace = GetDefaultDialogueNamespace(Database->LocalizationSettings.Namespace);
+    for (const TSoftObjectPtr<UDialogueTree>& TreePtr : Database->DialogueTrees)
+    {
+        UDialogueTree* Tree = TreePtr.Get();
+        if (!Tree && !TreePtr.IsNull())
+        {
+            Tree = TreePtr.LoadSynchronous();
+        }
+
+        if (!Tree)
+        {
+            continue;
+        }
+
+        TArray<FChronicleDialogueLocalizationEntry> TreeEntries;
+        if (!GatherDialogueTextsFromTree(Tree, Namespace, Culture, TreeEntries, OutError))
+        {
+            return false;
+        }
+
+        OutEntries.Append(TreeEntries);
+    }
+
+    OutEntries.Sort([](const FChronicleDialogueLocalizationEntry& Left, const FChronicleDialogueLocalizationEntry& Right)
+    {
+        if (Left.Namespace != Right.Namespace)
+        {
+            return Left.Namespace < Right.Namespace;
+        }
+        return Left.Key.LexicalLess(Right.Key);
+    });
+
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueJsonLibrary::ExportLocalizationCsvFromTree(UDialogueTree* Tree, const FString& Namespace, const FString& Culture, FString& OutCsv, FString& OutError)
+{
+    TArray<FChronicleDialogueLocalizationEntry> Entries;
+    if (!GatherDialogueTextsFromTree(Tree, Namespace, Culture, Entries, OutError))
+    {
+        return false;
+    }
+
+    OutCsv.Reset();
+    AppendCsvRow(OutCsv, {
+        TEXT("Namespace"),
+        TEXT("Key"),
+        TEXT("Culture"),
+        TEXT("TreeGuid"),
+        TEXT("NodeGuid"),
+        TEXT("LineIndex"),
+        TEXT("LineID"),
+        TEXT("SpeakerTag"),
+        TEXT("SourceText"),
+        TEXT("TranslatedText"),
+        TEXT("ContextComment")
+    });
+
+    for (const FChronicleDialogueLocalizationEntry& Entry : Entries)
+    {
+        AppendCsvRow(OutCsv, {
+            Entry.Namespace,
+            Entry.Key.ToString(),
+            Entry.Culture,
+            Entry.TreeGuid.ToString(EGuidFormats::DigitsWithHyphens),
+            Entry.NodeGuid.ToString(EGuidFormats::DigitsWithHyphens),
+            FString::FromInt(Entry.LineIndex),
+            Entry.LineID.ToString(),
+            Entry.SpeakerTag.ToString(),
+            Entry.SourceText.ToString(),
+            Entry.TranslatedText.ToString(),
+            Entry.ContextComment
+        });
+    }
+
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueJsonLibrary::ImportLocalizationCsvToTree(UDialogueTree* Tree, const FString& Csv, FString& OutError)
+{
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    TArray<TArray<FString>> Rows;
+    if (!ParseCsvRows(Csv, Rows, OutError))
+    {
+        return false;
+    }
+
+    if (Rows.Num() < 2)
+    {
+        OutError = TEXT("Localization CSV must contain a header row and at least one data row.");
+        return false;
+    }
+
+    const TArray<FString>& Header = Rows[0];
+    const int32 KeyColumn = FindColumn(Header, TEXT("Key"));
+    const int32 LineIdColumn = FindColumn(Header, TEXT("LineID"));
+    const int32 NodeGuidColumn = FindColumn(Header, TEXT("NodeGuid"));
+    const int32 LineIndexColumn = FindColumn(Header, TEXT("LineIndex"));
+    const int32 TranslatedTextColumn = FindColumn(Header, TEXT("TranslatedText"));
+
+    if (TranslatedTextColumn == INDEX_NONE || (KeyColumn == INDEX_NONE && LineIdColumn == INDEX_NONE))
+    {
+        OutError = TEXT("Localization CSV header must include TranslatedText and either Key or LineID.");
+        return false;
+    }
+
+    Tree->Modify();
+    bool bImportedAnyText = false;
+    for (int32 RowIndex = 1; RowIndex < Rows.Num(); ++RowIndex)
+    {
+        const TArray<FString>& Row = Rows[RowIndex];
+        const FString TranslatedText = GetCsvCell(Row, TranslatedTextColumn);
+        if (TranslatedText.IsEmpty())
+        {
+            continue;
+        }
+
+        FString Key = KeyColumn != INDEX_NONE ? GetCsvCell(Row, KeyColumn) : FString();
+        if (Key.IsEmpty() && LineIdColumn != INDEX_NONE)
+        {
+            Key = GetCsvCell(Row, LineIdColumn);
+        }
+
+        FGuid NodeGuid;
+        if (NodeGuidColumn != INDEX_NONE)
+        {
+            FGuid::Parse(GetCsvCell(Row, NodeGuidColumn), NodeGuid);
+        }
+        const int32 LineIndex = LineIndexColumn != INDEX_NONE ? FCString::Atoi(*GetCsvCell(Row, LineIndexColumn)) : INDEX_NONE;
+
+        FDialogueLine* Line = FindLineByLocalizationKey(Tree, Key, NodeGuid, LineIndex);
+        if (!Line)
+        {
+            OutError = FString::Printf(TEXT("No dialogue line found for localization CSV row %d."), RowIndex + 1);
+            return false;
+        }
+
+        Line->Text = FText::FromString(TranslatedText);
+        bImportedAnyText = true;
+    }
+
+    if (bImportedAnyText)
+    {
+        Tree->MarkPackageDirty();
+    }
+
+    OutError.Reset();
+    return true;
 }
 
 bool UChronicleDialogueJsonLibrary::ValidateDialogueTree(UDialogueTree* Tree, TArray<FChronicleDialogueValidationIssue>& OutIssues)

@@ -1,5 +1,26 @@
 # Chronicle Engine Release Notes
 
+## 0.8.0-dev Localization Pipeline Pass
+
+This development pass adds the first complete localization gather/import workflow.
+
+### Highlights
+
+- Added stable `LineID` repair through `EnsureStableLineIds`.
+- Added tree-level and database-level text gather helpers.
+- Added localization CSV export/import using stable `Key` / `LineID`.
+- Localization import ignores empty `TranslatedText` cells, so partial translation sheets do not overwrite source text.
+- Added `CultureVoiceTables` to `UDialogueDatabase`.
+- Added `ResolveVoiceTableForCulture`, with culture-specific lookup and default `VoiceTable` fallback.
+- Added automation coverage for stable key repair, gather, localization CSV import, database gather, and voice-table culture fallback.
+
+### Verification
+
+- UE 5.3 editor build: passed.
+- UE 5.3 `Chronicle` automation suite: 30 tests passed.
+- UE 5.7 editor build smoke: passed.
+- 100-node condition traversal recorded `0.0557ms` after warm-up.
+
 ## 0.7.0-dev Default UMG Presentation Pass
 
 This development pass adds a concrete, source-built default dialogue HUD on top of the existing presentation controller.
@@ -16,9 +37,9 @@ This development pass adds a concrete, source-built default dialogue HUD on top 
 ### Verification
 
 - UE 5.3 editor build: passed.
-- UE 5.3 `Chronicle` automation suite: 29 tests passed.
+- UE 5.3 `Chronicle` automation suite: 30 tests passed.
 - UE 5.7 editor build smoke: passed.
-- 100-node condition traversal recorded `0.0482ms` after warm-up.
+- 100-node condition traversal recorded `0.0557ms` after warm-up.
 
 ## 0.6.0-dev Editor Workflow Pass
 
@@ -36,8 +57,8 @@ This development pass expands the Dialogue Tree editor toward the full PRD editi
 ### Verification
 
 - UE 5.3 editor build: passed.
-- UE 5.3 `Chronicle` automation suite: 29 tests passed.
-- 100-node condition traversal recorded `0.0482ms` after warm-up.
+- UE 5.3 `Chronicle` automation suite: 30 tests passed.
+- 100-node condition traversal recorded `0.0557ms` after warm-up.
 
 ## 0.5.0 Release Notes
 
@@ -54,13 +75,13 @@ Chronicle Engine 0.5.0 is the M5 hardening pass for the UE5 JRPG dialogue plugin
 - Variable name to Gameplay Tag resolution is cached in `UVariableBank`.
 - Repeated condition results are cached during a dialogue run and invalidated when variables, save state, or events can change runtime state.
 - Rollback mementos are now stored at player-visible pause points instead of every internal node transition.
-- The 100-node condition traversal automation budget is tightened to `0.25ms`; the latest UE 5.3 editor automation run recorded `0.0482ms` after warm-up.
+- The 100-node condition traversal automation budget is tightened to `0.25ms`; the latest UE 5.3 editor automation run recorded `0.0557ms` after warm-up.
 - Packaging is scripted with `Scripts/PackagePlugin.ps1`.
 
 ## Verification
 
 - UE 5.3 editor build: passed.
-- UE 5.3 `Chronicle` automation suite: 29 tests passed.
+- UE 5.3 `Chronicle` automation suite: 30 tests passed.
 - UE 5.7 editor build smoke: passed.
 - UE 5.3 `BuildPlugin` package: passed for Win64 Editor, Development Game, and Shipping Game targets.
 

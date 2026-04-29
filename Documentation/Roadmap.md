@@ -10,12 +10,15 @@ Acceptance:
 
 ## M2 Asset Pipeline
 
-Status: current implementation pass.
+Status: complete for the v0.8 localization pipeline pass.
 
 - Stable JSON import/export with schema marker and deterministic node/edge ordering.
 - CSV export/import for localization and writer text handoff.
+- Stable localization gather keys through `LineID`, with automatic missing/duplicate key repair from `TreeGuid + NodeGuid + LineIndex`.
+- Tree/database text gather helpers and localization CSV export/import by stable key.
+- Culture-specific voice-table lookup through `UDialogueDatabase::CultureVoiceTables` and `ResolveVoiceTableForCulture`.
 - Dialogue-tree validation for missing root, broken edges, duplicate node GUIDs, empty content warnings, and unreachable nodes.
-- Remaining: localization gather helpers and richer external spreadsheet creation workflows.
+- Remaining pipeline polish moves to v0.9/v1.0: richer external spreadsheet templates and editor menu commands.
 
 ## M3 Editor Experience
 
@@ -53,7 +56,7 @@ Status: current release-candidate hardening pass.
 - Added `UDialogueTrigger` assets and `UDialogueTriggerManager` runtime activation flow with priority selection, condition checks, cooldowns, one-shot consumption, tag activation, and subsystem access.
 - Condition expressions compile once into a cached AST, with per-dialogue condition result caching and variable-name tag caching.
 - Rollback mementos are limited to player-visible pause points instead of internal node hops.
-- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.0482ms` after warm-up.
+- The 100-node condition traversal test now enforces a hardened `0.25ms` editor automation budget; the latest UE 5.3 run recorded `0.0557ms` after warm-up.
 - Added release notes, release checklist, and a packaging script.
 - UE 5.7 smoke and UE 5.3 BuildPlugin packaging pass for this release-candidate pass.
 - Remaining before public release: optionally tag `v0.5.0` and attach the package to a GitHub Release.
