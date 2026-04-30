@@ -10,6 +10,7 @@ Chronicle Engine is an MIT-licensed Unreal Engine 5 source plugin for JRPG, visu
 - Repository: `TodayYueC/ChronicleEngine`
 - License: MIT
 - PRD comparison: [Documentation/PRDCompletionMatrix.md](Documentation/PRDCompletionMatrix.md)
+- Step-by-step usage tutorial: [Documentation/UsageTutorial.md](Documentation/UsageTutorial.md) ([English](Documentation/UsageTutorial.md#english-step-by-step-tutorial) / [中文](Documentation/UsageTutorial.md#chinese-step-by-step-tutorial))
 
 ---
 
@@ -994,6 +995,7 @@ Optional future release polish:
 
 ## 28. Additional Documentation
 
+- [Documentation/UsageTutorial.md](Documentation/UsageTutorial.md) ([English](Documentation/UsageTutorial.md#english-step-by-step-tutorial) / [中文](Documentation/UsageTutorial.md#chinese-step-by-step-tutorial))
 - [Documentation/AssetPipeline.md](Documentation/AssetPipeline.md)
 - [Documentation/EditorWorkflow.md](Documentation/EditorWorkflow.md)
 - [Documentation/IntegrationWorkflow.md](Documentation/IntegrationWorkflow.md)
@@ -1992,6 +1994,7 @@ PRD 中有一些商业项目功能既可以用源码系统交付，也可以用�
 
 ## 28. 更多文档
 
+- [Documentation/UsageTutorial.md](Documentation/UsageTutorial.md) ([English](Documentation/UsageTutorial.md#english-step-by-step-tutorial) / [中文](Documentation/UsageTutorial.md#chinese-step-by-step-tutorial))
 - [Documentation/AssetPipeline.md](Documentation/AssetPipeline.md)
 - [Documentation/EditorWorkflow.md](Documentation/EditorWorkflow.md)
 - [Documentation/IntegrationWorkflow.md](Documentation/IntegrationWorkflow.md)
