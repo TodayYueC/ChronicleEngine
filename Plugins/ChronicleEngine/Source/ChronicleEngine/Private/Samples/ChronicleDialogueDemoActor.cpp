@@ -3,7 +3,9 @@
 #include "Data/DialogueTree.h"
 #include "Engine/GameInstance.h"
 #include "GameplayTagsManager.h"
+#include "Presentation/ChronicleDialogueDefaultWidget.h"
 #include "Presentation/ChronicleDialoguePresentationController.h"
+#include "Presentation/ChronicleDialogueWidget.h"
 #include "Runtime/ChronicleDialogueSubsystem.h"
 #include "Runtime/DialogueRunner.h"
 
@@ -47,6 +49,7 @@ FDialogueLine MakeDemoLine(const TCHAR* LineID, const TCHAR* Text, const TCHAR* 
 AChronicleDialogueDemoActor::AChronicleDialogueDemoActor()
 {
     PrimaryActorTick.bCanEverTick = false;
+    DialogueWidgetClass = UChronicleDialogueDefaultWidget::StaticClass();
 }
 
 void AChronicleDialogueDemoActor::BeginPlay()
@@ -120,5 +123,49 @@ void AChronicleDialogueDemoActor::StartDemoDialogue()
     UDialogueRunner* Runner = DialogueSubsystem->GetDialogueRunner();
     UChronicleDialoguePresentationController* PresentationController = DialogueSubsystem->GetPresentationController();
     PresentationController->BindRunner(Runner);
+    EnsureDemoWidget();
     PresentationController->StartDialogue(DemoTree, EntryNode);
+}
+
+UChronicleDialogueWidget* AChronicleDialogueDemoActor::EnsureDemoWidget()
+{
+    if (!bCreateDefaultWidget)
+    {
+        return RuntimeWidget;
+    }
+
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!GameInstance)
+    {
+        return RuntimeWidget;
+    }
+
+    UChronicleDialogueSubsystem* DialogueSubsystem = GameInstance->GetSubsystem<UChronicleDialogueSubsystem>();
+    if (!DialogueSubsystem)
+    {
+        return RuntimeWidget;
+    }
+
+    UChronicleDialoguePresentationController* PresentationController = DialogueSubsystem->GetPresentationController();
+    if (!RuntimeWidget)
+    {
+        TSubclassOf<UChronicleDialogueWidget> WidgetClassToUse = DialogueWidgetClass;
+        if (!WidgetClassToUse)
+        {
+            WidgetClassToUse = UChronicleDialogueDefaultWidget::StaticClass();
+        }
+
+        RuntimeWidget = CreateWidget<UChronicleDialogueWidget>(GetWorld(), WidgetClassToUse);
+        if (RuntimeWidget)
+        {
+            RuntimeWidget->AddToViewport(WidgetZOrder);
+        }
+    }
+
+    if (RuntimeWidget)
+    {
+        RuntimeWidget->BindPresentationController(PresentationController);
+    }
+
+    return RuntimeWidget;
 }

@@ -1,6 +1,6 @@
 param(
     [string]$EngineRoot = "R:\UE\UE_5.3",
-    [string]$PackageName = "ChronicleEngine-0.5.0-UE5.3"
+    [string]$PackageName = "ChronicleEngine-0.12.0-UE5.3"
 )
 
 $ErrorActionPreference = "Stop"

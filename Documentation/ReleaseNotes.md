@@ -1,5 +1,27 @@
 # Chronicle Engine Release Notes
 
+## 0.12.0-dev Phase 3/4 Finalization Pass
+
+This development pass closes the current four-phase iteration with source-first presentation cue routing, demo HUD bootstrapping, CI validation entry points, and a PRD completion comparison.
+
+### Highlights
+
+- Added `UChronicleDialogueCueRouter` for Blueprint/C++ camera and audio cue routing.
+- Added `AChronicleDialogueCueDirector`, a level actor that can auto-bind to the Chronicle subsystem and optionally apply camera view targets.
+- `AChronicleDialogueDemoActor` can now create and bind the source-built default HUD at runtime.
+- Added `Scripts/RunChronicleValidation.ps1` as a shared local/self-hosted CI validation script.
+- Added `.github/workflows/chronicle-validation.yml` for self-hosted Windows Unreal validation.
+- Added `Documentation/PRDCompletionMatrix.md` for final PRD comparison.
+- Updated plugin metadata to `0.12.0-dev`.
+
+### Verification
+
+- UE 5.3 editor build: passed.
+- UE 5.3 `Chronicle` automation suite: 35 tests passed.
+- UE 5.7 editor build smoke: passed.
+- UE 5.3 BuildPlugin package: passed.
+- 100-node condition traversal recorded `0.0844ms`.
+
 ## 0.11.0-dev Editor Pipeline And Debugger Tools Pass
 
 This development pass completes the current Phase 1 and Phase 2 iteration: editor asset-pipeline commands, condition validation, and richer debugger snapshots.

@@ -23,17 +23,21 @@ Status: complete for the `v0.11.0-dev` iteration.
 
 ### Phase 3: Presentation And Demo Polish
 
-Status: planned next.
+Status: complete for the `v0.12.0-dev` iteration.
 
-- Add optional source-first demo wiring and user-facing setup polish around the default widget, controller, and demo actor.
-- Keep binary sample assets optional and out of source control unless a release package explicitly needs them.
+- Added source-first cue routing through `UChronicleDialogueCueRouter`.
+- Added `AChronicleDialogueCueDirector` as a level actor for camera/audio cue routing and optional camera view-target application.
+- `AChronicleDialogueDemoActor` now defaults to the source-built HUD and can create/bind it at runtime.
+- Binary sample assets remain optional and out of source control.
 
 ### Phase 4: Release, CI, Compatibility, And Final Acceptance
 
-Status: planned after Phase 3.
+Status: complete for the `v0.12.0-dev` iteration.
 
-- Re-run UE 5.3 build/tests, UE 5.7 smoke, package validation, release checklist, and final PRD comparison.
-- Prepare version tag, GitHub Release assets, and final documentation pass.
+- Added `Scripts/RunChronicleValidation.ps1` as the shared local/CI validation entry point.
+- Added `.github/workflows/chronicle-validation.yml` for self-hosted Windows Unreal validation.
+- Re-ran UE 5.3 build/tests, UE 5.7 smoke, package validation, release checklist, and final PRD comparison.
+- Added `Documentation/PRDCompletionMatrix.md` for final requirements comparison.
 
 ## M1 Runtime Vertical Slice
 
@@ -74,7 +78,7 @@ Status: complete for the v0.11 editor workflow pass.
 
 ## M4 Presentation
 
-Status: complete for the v0.7 default UMG source-widget pass.
+Status: complete for the v0.12 Phase 3 presentation polish pass.
 
 - Added `UChronicleDialoguePresentationController` as the UI-facing orchestration layer over `UDialogueRunner`.
 - Added `UChronicleDialogueWidget`, an abstract UMG base widget that implements `IDialoguePresenter` and exposes Blueprint events/actions.
@@ -82,9 +86,10 @@ Status: complete for the v0.7 default UMG source-widget pass.
 - Added `UChronicleDialogueChoiceButton` for indexed choice forwarding from generated UMG buttons.
 - Added auto advance, skip mode, presentation backlog, rollback sync, choice forwarding, and line-completion presenter hooks.
 - Added camera and audio presentation cue tags through `Chronicle.Camera.*` and `Chronicle.Audio.*`.
-- Added `AChronicleDialogueDemoActor`, which builds and starts a small runtime demo tree without tracking binary sample assets.
-- Added automation coverage for backlog, auto, skip, rollback, choice forwarding, camera cue payloads, voice IDs, and default widget state.
-- Remaining release polish moves to M5: packaged demo content, optional binary showcase map, and broader compatibility hardening.
+- Added `UChronicleDialogueCueRouter` and `AChronicleDialogueCueDirector` for Blueprint-friendly camera/audio cue routing.
+- Added `AChronicleDialogueDemoActor`, which builds and starts a small runtime demo tree and can create/bind the default HUD without tracking binary sample assets.
+- Added automation coverage for backlog, auto, skip, rollback, choice forwarding, camera cue payloads, voice IDs, cue routing, demo HUD defaults, and default widget state.
+- Remaining optional showcase work: packaged binary demo map/assets for a public release page.
 
 ## M5 Hardening And Release
 
@@ -126,7 +131,7 @@ Status: complete for the v0.10 script import pass.
 
 ## M8 Editor Pipeline And Debugger Tools
 
-Status: current `v0.11.0-dev` Phase 1 + Phase 2 iteration.
+Status: complete for the `v0.11.0-dev` Phase 1 + Phase 2 iteration.
 
 - Added Dialogue Tree Content Browser actions for `Export Chronicle Pipeline Artifacts...` and `Import Chronicle Script CSV...`.
 - Added `FChronicleDialoguePipelineExportPaths` and `ExportDialogueTreePipelineArtifacts` for one-call production handoff files.
@@ -134,3 +139,14 @@ Status: current `v0.11.0-dev` Phase 1 + Phase 2 iteration.
 - Expanded `FChronicleDialogueDebuggerSnapshot` with node type, line index, variables, outgoing edges, history, and seen dialogue hashes.
 - Added automation coverage for editor pipeline tools and expanded debugger snapshots.
 - UE 5.3 automation now covers 34 Chronicle tests; latest 100-node condition traversal run recorded `0.0458ms`.
+
+## M9 Phase 3/4 Finalization
+
+Status: current `v0.12.0-dev` Phase 3 + Phase 4 iteration.
+
+- Added source-first presentation cue routing with `UChronicleDialogueCueRouter`.
+- Added `AChronicleDialogueCueDirector` for level camera/audio cue handling.
+- Updated `AChronicleDialogueDemoActor` so the demo can create and bind the default HUD at runtime.
+- Added `Scripts/RunChronicleValidation.ps1` and a self-hosted GitHub Actions workflow.
+- Added final PRD completion matrix documentation.
+- UE 5.3 automation now covers 35 Chronicle tests; latest 100-node condition traversal run recorded `0.0844ms`.

@@ -1,6 +1,6 @@
 # Chronicle Presentation Workflow
 
-M4 added the source-first presentation controller. The v0.7 pass adds a ready-to-use UMG default HUD while keeping the workflow source-first and friendly to source control.
+M4 added the source-first presentation controller. The v0.12 Phase 3 pass adds cue routing and demo HUD bootstrapping while keeping the workflow source-first and friendly to source control.
 
 ## Core Classes
 
@@ -21,9 +21,17 @@ M4 added the source-first presentation controller. The v0.7 pass adds a ready-to
   - Provides portrait and full-body image slots for project-specific speaker art.
 - `UChronicleDialogueChoiceButton`
   - Indexed UMG button used by the default HUD for choice forwarding.
+- `UChronicleDialogueCueRouter`
+  - Routes presentation events into camera/audio cue structs.
+  - Turns line `VoiceID` values into source-first audio cues.
+  - Can be used directly from Blueprint or C++ without owning a level actor.
+- `AChronicleDialogueCueDirector`
+  - Level Actor wrapper around the cue router.
+  - Can auto-bind to the Chronicle subsystem on BeginPlay.
+  - Can register named camera actors and call `SetViewTargetWithBlend` for matching camera cues.
 - `AChronicleDialogueDemoActor`
   - Builds a small runtime demo tree in source.
-  - Demonstrates a camera cue, voiced lines, choices, and presentation-controller startup without requiring binary sample assets.
+  - Demonstrates a camera cue, voiced lines, choices, presentation-controller startup, and default HUD creation without requiring binary sample assets.
 
 ## Subsystem Entry
 
@@ -83,7 +91,14 @@ Default cue tags added in M4:
 - `Chronicle.Audio.PlayVoice`
 - `Chronicle.Audio.StopVoice`
 
-Voice playback can also use `FDialogueLine::VoiceID` from the line-started event. Camera and audio payload keys are project-defined; the demo actor uses `Shot` and `BlendTime`.
+Voice playback can also use `FDialogueLine::VoiceID` from the line-started event. `UChronicleDialogueCueRouter` emits that as an `FChronicleAudioCue`, so Blueprint audio systems can bind to one cue stream. Camera and audio payload keys are project-defined; the demo actor uses `Shot` and `BlendTime`.
+
+To use a source-first level camera director:
+
+1. Place `AChronicleDialogueCueDirector` in the level.
+2. Leave `bAutoBindToSubsystemOnBeginPlay` enabled.
+3. Register camera actors by `ShotName`.
+4. Emit a camera node or event with `Payload["Shot"] = "ShotName"`.
 
 ## Automated Coverage
 
@@ -96,4 +111,6 @@ M4 automation covers:
 - Choice forwarding through the presentation controller.
 - Camera cue and payload preservation.
 - Voice ID preservation on presented lines.
+- Cue router conversion of camera events and line `VoiceID` values.
+- Demo actor default HUD class bootstrapping.
 - Default widget state for typewriter reveal, local backlog, choice forwarding, Auto, and Skip controls.

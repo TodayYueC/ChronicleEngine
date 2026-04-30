@@ -4,6 +4,7 @@
 #include "Data/DialogueTree.h"
 #include "Data/DialogueTrigger.h"
 #include "GameplayTagsManager.h"
+#include "Presentation/ChronicleDialogueCueDirector.h"
 #include "Presentation/ChronicleDialogueDefaultWidget.h"
 #include "Presentation/ChronicleDialoguePresentationController.h"
 #include "Runtime/DialogueConditionEvaluator.h"
@@ -11,6 +12,7 @@
 #include "Runtime/DialogueTextParser.h"
 #include "Runtime/DialogueTriggerManager.h"
 #include "Runtime/VariableBank.h"
+#include "Samples/ChronicleDialogueDemoActor.h"
 #include "Samples/ChronicleExampleQuestAdapter.h"
 #include "HAL/PlatformTime.h"
 
@@ -712,6 +714,53 @@ bool FChroniclePresentationSkipChoiceCueTest::RunTest(const FString& Parameters)
     Controller->SelectChoice(1);
     TestEqual(TEXT("Choice selection forwards to selected branch"), Controller->GetLastLine().Text.ToString(), FString(TEXT("short result")));
 
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChroniclePresentationCueRouterTest, "Chronicle.Presentation.CueRouter", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChroniclePresentationCueRouterTest::RunTest(const FString& Parameters)
+{
+    UDialogueRunner* Runner = NewObject<UDialogueRunner>();
+    Runner->Initialize(nullptr);
+
+    UChronicleDialoguePresentationController* Controller = NewObject<UChronicleDialoguePresentationController>();
+    Controller->BindRunner(Runner);
+
+    UChronicleDialogueCueRouter* CueRouter = NewObject<UChronicleDialogueCueRouter>();
+    CueRouter->BindPresentationController(Controller);
+
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+    const FGuid RootGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Root);
+    const FGuid CameraGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Camera);
+    const FGuid SpeechGuid = ChronicleTests::AddNode(Tree, EDialogueNodeType::Speech);
+    Tree->RootNodeGuid = RootGuid;
+
+    FDialogueNode* CameraNode = Tree->FindNodeMutable(CameraGuid);
+    CameraNode->EventPayload.Add(TEXT("Shot"), TEXT("AutomationShot"));
+    CameraNode->EventPayload.Add(TEXT("BlendTime"), TEXT("0.75"));
+
+    FDialogueLine Line;
+    Line.LineID = TEXT("CueRouterLine");
+    Line.SpeakerTag = ChronicleTests::Tag(TEXT("Chronicle.Speaker.Alice"));
+    Line.Text = FText::FromString(TEXT("cue router"));
+    Line.VoiceID = TEXT("VO_CueRouter");
+    Tree->FindNodeMutable(SpeechGuid)->Lines.Add(Line);
+
+    ChronicleTests::AddEdge(Tree, RootGuid, CameraGuid);
+    ChronicleTests::AddEdge(Tree, CameraGuid, SpeechGuid);
+
+    Controller->StartDialogue(Tree);
+
+    TestEqual(TEXT("Cue router receives one camera cue"), CueRouter->GetCameraCueCount(), 1);
+    TestEqual(TEXT("Camera cue shot name is parsed"), CueRouter->GetLastCameraCue().ShotName, FName(TEXT("AutomationShot")));
+    TestEqual(TEXT("Camera cue blend time is parsed"), CueRouter->GetLastCameraCue().BlendTime, 0.75f);
+    TestEqual(TEXT("Cue router receives one line voice cue"), CueRouter->GetAudioCueCount(), 1);
+    TestEqual(TEXT("Line voice cue name is preserved"), CueRouter->GetLastAudioCue().CueName, FName(TEXT("VO_CueRouter")));
+    TestTrue(TEXT("Line voice cue is marked as line-driven"), CueRouter->GetLastAudioCue().bFromDialogueLine);
+    TestEqual(TEXT("Demo actor defaults to the source-built HUD"), AChronicleDialogueDemoActor::StaticClass()->GetDefaultObject<AChronicleDialogueDemoActor>()->DialogueWidgetClass.Get(), UChronicleDialogueDefaultWidget::StaticClass());
+
+    CueRouter->UnbindPresentationController();
     return true;
 }
 

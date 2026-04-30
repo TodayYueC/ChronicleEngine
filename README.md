@@ -2,8 +2,9 @@
 
 Chronicle Engine is an MIT-licensed Unreal Engine 5 plugin for JRPG-style dialogue and narrative systems. It ships as a source plugin plus a minimal host project for compiling, testing, and validating the full workflow.
 
-- Current development version: `v0.11.0-dev`
-- Latest packaged release: `v0.5.0`
+- Current development version: `v0.12.0-dev`
+- Latest public packaged release: `v0.5.0`
+- Latest locally validated package: `v0.12.0-dev`
 - Primary engine baseline: UE 5.3
 - Compatibility smoke target: UE 5.7
 - Repository: `TodayYueC/ChronicleEngine`
@@ -37,6 +38,8 @@ Main capabilities:
 - Editor condition-expression validation helpers and debugger snapshots that expose current node data, variables, history, seen-line hashes, and outgoing edge condition results.
 - `UDialogueImporterBase` and `UChronicleCsvDialogueImporter` as source-first importer extension points.
 - `UChronicleDialoguePresentationController`, `UChronicleDialogueWidget`, and `UChronicleDialogueDefaultWidget` for UI integration.
+- `UChronicleDialogueCueRouter` and `AChronicleDialogueCueDirector` for source-first camera and audio cue routing.
+- `AChronicleDialogueDemoActor` can build a demo tree and create/bind the default HUD at runtime.
 - Automation coverage for runtime, editor, presentation, pipeline, localization, audit, and integration flows.
 
 ## 2. Install
@@ -81,10 +84,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 Current verification status:
 
 - UE 5.3 build passes.
-- UE 5.3 `Chronicle` automation tests pass: 34/34.
+- UE 5.3 `Chronicle` automation tests pass: 35/35.
 - UE 5.7 build smoke passes.
 - UE 5.3 BuildPlugin packaging passes for the latest packaged release.
-- 100-node condition traversal budget: `0.25ms`; latest run: `0.0458ms`.
+- 100-node condition traversal budget: `0.25ms`; latest run: `0.0844ms`.
 
 ## 4. Create Assets
 
@@ -312,6 +315,18 @@ The controller handles:
 - Rollback
 - presentation event forwarding
 
+### Cue Router And Director
+
+Use `UChronicleDialogueCueRouter` when a Blueprint or subsystem needs camera/audio cue data without owning an Actor. Use `AChronicleDialogueCueDirector` when a level wants a source-first camera director that can auto-bind to the Chronicle subsystem.
+
+The cue layer routes:
+
+- `Chronicle.Camera.*` events into `FChronicleCameraCue`
+- `Chronicle.Audio.*` events into `FChronicleAudioCue`
+- line `VoiceID` values into voice/audio cues
+
+`AChronicleDialogueCueDirector` can register named camera actors and apply `SetViewTargetWithBlend` when a matching camera cue arrives.
+
 ### Default Widget
 
 Create a Widget Blueprint derived from `UChronicleDialogueDefaultWidget`, or instantiate it from C++.
@@ -434,7 +449,7 @@ Default UE 5.3 package:
 Custom engine root:
 
 ```powershell
-.\Scripts\PackagePlugin.ps1 -EngineRoot "R:\UE\UE_5.7" -PackageName "ChronicleEngine-0.5.0-UE5.7"
+.\Scripts\PackagePlugin.ps1 -EngineRoot "R:\UE\UE_5.7" -PackageName "ChronicleEngine-0.12.0-UE5.7"
 ```
 
 Packages are written to `Artifacts/`, which is ignored by git.
@@ -498,6 +513,8 @@ BindPresentationController(PresentationController);
 - 编辑器条件表达式校验工具和调试快照可查看当前节点、变量、历史、已看对白哈希和输出边条件结果。
 - `UDialogueImporterBase` 和 `UChronicleCsvDialogueImporter` 提供源码级导入器扩展点。
 - `UChronicleDialoguePresentationController`、`UChronicleDialogueWidget`、`UChronicleDialogueDefaultWidget` 用于 UI 接入。
+- `UChronicleDialogueCueRouter` 和 `AChronicleDialogueCueDirector` 用于源码级镜头/音频 cue 路由。
+- `AChronicleDialogueDemoActor` 可在运行时生成 demo tree，并自动创建和绑定默认 HUD。
 - 覆盖 Runtime、Editor、Presentation、Pipeline、Localization、Audit、Integration 的自动化测试。
 
 ## 2. 安装方式
@@ -542,10 +559,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 当前验证状态：
 
 - UE 5.3 编译通过。
-- UE 5.3 `Chronicle` 自动化测试通过：34/34。
+- UE 5.3 `Chronicle` 自动化测试通过：35/35。
 - UE 5.7 编译冒烟通过。
 - 最新打包版本的 UE 5.3 BuildPlugin 流程通过。
-- 100 节点条件遍历预算：`0.25ms`；最新记录：`0.0458ms`。
+- 100 节点条件遍历预算：`0.25ms`；最新记录：`0.0844ms`。
 
 ## 4. 创建资产
 
@@ -773,6 +790,18 @@ UChronicleDialoguePresentationController* Presentation = Subsystem->GetPresentat
 - 回滚
 - 转发表现层事件
 
+### Cue Router 与 Director
+
+当蓝图或系统只需要接收镜头/音频 cue 数据时，使用 `UChronicleDialogueCueRouter`。当关卡需要一个可放置的源码级镜头导演时，使用 `AChronicleDialogueCueDirector`，它可以自动绑定 Chronicle 子系统。
+
+Cue 层会路由：
+
+- `Chronicle.Camera.*` 事件到 `FChronicleCameraCue`
+- `Chronicle.Audio.*` 事件到 `FChronicleAudioCue`
+- 对白行里的 `VoiceID` 到语音/音频 cue
+
+`AChronicleDialogueCueDirector` 可以注册命名 Camera Actor，并在收到匹配镜头 cue 后调用 `SetViewTargetWithBlend`。
+
 ### 默认 Widget
 
 创建父类为 `UChronicleDialogueDefaultWidget` 的 Widget Blueprint，或从 C++ 实例化。
@@ -895,7 +924,7 @@ Excel 编写流程建议先导出为 CSV，再通过 `ImportDialogueScriptCsvStr
 指定引擎路径：
 
 ```powershell
-.\Scripts\PackagePlugin.ps1 -EngineRoot "R:\UE\UE_5.7" -PackageName "ChronicleEngine-0.5.0-UE5.7"
+.\Scripts\PackagePlugin.ps1 -EngineRoot "R:\UE\UE_5.7" -PackageName "ChronicleEngine-0.12.0-UE5.7"
 ```
 
 输出目录为 `Artifacts/`，该目录已被 git 忽略。
@@ -938,6 +967,7 @@ BindPresentationController(PresentationController);
 - `Documentation/EditorWorkflow.md`
 - `Documentation/IntegrationWorkflow.md`
 - `Documentation/PresentationWorkflow.md`
+- `Documentation/PRDCompletionMatrix.md`
 - `Documentation/ReleaseNotes.md`
 - `Documentation/ReleaseChecklist.md`
 

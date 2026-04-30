@@ -62,12 +62,12 @@ bool IsBlankConditionExpression(const FString& Expression)
     return true;
 }
 
-bool IsVariableTokenCharacter(TCHAR Character)
+bool IsChronicleEditorVariableTokenCharacter(TCHAR Character)
 {
     return FChar::IsAlnum(Character) || Character == TEXT('.') || Character == TEXT('_');
 }
 
-void ExtractVariableReferences(const FString& Expression, TArray<FString>& OutVariableReferences)
+void ExtractChronicleEditorVariableReferences(const FString& Expression, TArray<FString>& OutVariableReferences)
 {
     static const FString Prefix = TEXT("Chronicle.Variable.");
     int32 SearchStart = 0;
@@ -80,7 +80,7 @@ void ExtractVariableReferences(const FString& Expression, TArray<FString>& OutVa
         }
 
         int32 EndIndex = PrefixIndex;
-        while (EndIndex < Expression.Len() && IsVariableTokenCharacter(Expression[EndIndex]))
+        while (EndIndex < Expression.Len() && IsChronicleEditorVariableTokenCharacter(Expression[EndIndex]))
         {
             ++EndIndex;
         }
@@ -612,7 +612,7 @@ bool UChronicleDialogueEditorLibrary::ValidateConditionExpressionForTree(UDialog
         return false;
     }
 
-    ExtractVariableReferences(Expression, OutResult.VariableReferences);
+    ExtractChronicleEditorVariableReferences(Expression, OutResult.VariableReferences);
 
     if (IsBlankConditionExpression(Expression))
     {

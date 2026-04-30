@@ -1,0 +1,34 @@
+name: Chronicle Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: UE validation
+    runs-on: [self-hosted, windows, unreal]
+    timeout-minutes: 120
+
+    env:
+      CHRONICLE_UE53_ROOT: R:\UE\UE_5.3
+      CHRONICLE_UE57_ROOT: R:\UE\UE_5.7
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Validate Chronicle Engine
+        shell: pwsh
+        run: >
+          ./Scripts/RunChronicleValidation.ps1
+          -Engine53Root "${{ env.CHRONICLE_UE53_ROOT }}"
+          -Engine57Root "${{ env.CHRONICLE_UE57_ROOT }}"
+          -PackageName "ChronicleEngine-ci-UE5.3"
