@@ -1,6 +1,6 @@
 # Chronicle Dialogue Tree Editor
 
-## Current V0.6 Editor Scope
+## Current V0.11 Editor Scope
 
 Double-clicking a `UDialogueTree` asset opens the Chronicle custom asset editor.
 
@@ -18,8 +18,10 @@ The current editor provides:
 - link authoring from a source node to a target node with output slot and optional condition expression
 - selected-node outgoing edge inspection and deletion
 - selected-node Details panel editing through `UChronicleDialogueNodeDetails`
-- breakpoint metadata, graph breakpoint markers, and debugger snapshot support
+- breakpoint metadata and graph breakpoint markers
+- debugger snapshots with current node type, line index, variable values/scopes, history, seen-line hashes, and outgoing edge condition results
 - soft-lock metadata for Dialogue Tree and Dialogue Database assets
+- Dialogue Tree Content Browser actions for pipeline export and script CSV import
 - node color coding for all PRD node types
 - basic node creation buttons for Speech, Choice, and Condition nodes
 - search filtering across node type, GUID, line text, speaker tag, choice text, conditions, and event tags
@@ -40,6 +42,9 @@ The graph is still a transient editor model. `UDialogueTree` remains the durable
 - `SetDialogueNodeBreakpoint`
 - `GetDialogueNodeBreakpoints`
 - `CaptureDebuggerSnapshot`
+- `ValidateConditionExpressionForTree`
+- `BuildDefaultDialogueTreeExportPaths`
+- `ExportDialogueTreePipelineArtifacts`
 - `AcquireDialogueTreeLock`
 - `ReleaseDialogueTreeLock`
 - `AcquireDialogueDatabaseLock`
@@ -54,13 +59,12 @@ The editor graph layer currently exposes:
 - `UChronicleDialogueGraphSchema`
 - `UChronicleDialogueNodeDetails`
 
-Automation tests cover node creation, starter content defaults, root duplication prevention, search, node display names, node movement, node duplication, node deletion cleanup, edge creation, duplicate edge rejection, conditional edges, edge deletion, graph schema connection validation, graph-to-tree edge synchronization, graph-to-tree position synchronization, pin-link break synchronization, all PRD graph context actions, Details panel data application, breakpoints, debugger snapshots, and tree/database soft locks.
+Automation tests cover node creation, starter content defaults, root duplication prevention, search, node display names, node movement, node duplication, node deletion cleanup, edge creation, duplicate edge rejection, conditional edges, edge deletion, graph schema connection validation, graph-to-tree edge synchronization, graph-to-tree position synchronization, pin-link break synchronization, all PRD graph context actions, Details panel data application, breakpoints, expanded debugger snapshots, expression validation, pipeline artifact export, and tree/database soft locks.
 
 ## Next Editor Work
 
-The editor is now complete for the v0.6 PRD workflow pass. Remaining editor-adjacent work moves into localization, audit, and release hardening:
+The editor is complete for the current Phase 1 and Phase 2 iteration. Remaining editor-adjacent work moves into release hardening:
 
 - richer expression-authoring widgets for condition fields
 - PIE debugger live-run polish
-- localization gather commands and audit reports
 - release packaging and compatibility hardening

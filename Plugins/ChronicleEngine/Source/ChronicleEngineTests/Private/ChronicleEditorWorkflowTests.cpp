@@ -7,6 +7,9 @@
 #include "Editor/ChronicleDialogueGraphNode.h"
 #include "Editor/ChronicleDialogueGraphSchema.h"
 #include "Editor/ChronicleDialogueNodeDetails.h"
+#include "GameplayTagsManager.h"
+#include "HAL/FileManager.h"
+#include "Misc/Paths.h"
 #include "Runtime/DialogueRunner.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleEditorAddNodeTest, "Chronicle.Editor.TreeEditor.AddNodeAndSearch", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -315,13 +318,23 @@ bool FChronicleEditorDebuggerAndLockTest::RunTest(const FString& Parameters)
     UDialogueTree* Tree = NewObject<UDialogueTree>();
     Tree->TreeGuid = FGuid::NewGuid();
 
+    const FGameplayTag ScoreTag = UGameplayTagsManager::Get().RequestGameplayTag(FName(TEXT("Chronicle.Variable.Score")), false);
+    FVariableDefinition ScoreDefinition;
+    ScoreDefinition.VariableTag = ScoreTag;
+    ScoreDefinition.DefaultValue = FVariableValue::MakeInt(2);
+    Tree->Variables.Add(ScoreDefinition);
+
     FString Error;
     FGuid RootGuid;
     FGuid SpeechGuid;
+    FGuid AfterSpeechGuid;
     TestTrue(TEXT("Root node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Root, FVector2D::ZeroVector, RootGuid, Error));
     TestTrue(TEXT("Speech node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Speech, FVector2D(200.0f, 0.0f), SpeechGuid, Error));
+    TestTrue(TEXT("Second speech node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Speech, FVector2D(420.0f, 0.0f), AfterSpeechGuid, Error));
     FDialogueEdge Edge;
+    FDialogueEdge ConditionalEdge;
     TestTrue(TEXT("Root can link to speech"), UChronicleDialogueEditorLibrary::AddDialogueEdge(Tree, RootGuid, SpeechGuid, 0, FString(), Edge, Error));
+    TestTrue(TEXT("Speech can link to conditional follow-up"), UChronicleDialogueEditorLibrary::AddDialogueEdge(Tree, SpeechGuid, AfterSpeechGuid, 0, TEXT("Chronicle.Variable.Score >= 1"), ConditionalEdge, Error));
     TestTrue(TEXT("Breakpoint can be enabled"), UChronicleDialogueEditorLibrary::SetDialogueNodeBreakpoint(Tree, SpeechGuid, true, TEXT("Stop here"), Error));
 
     UDialogueRunner* Runner = NewObject<UDialogueRunner>();
@@ -333,6 +346,30 @@ bool FChronicleEditorDebuggerAndLockTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Snapshot points at the speech node"), Snapshot.CurrentNodeGuid, SpeechGuid);
     TestEqual(TEXT("Snapshot records runner state"), Snapshot.RunnerState, EDialogueRunnerState::WaitingForInput);
     TestTrue(TEXT("Snapshot sees node breakpoint"), Snapshot.bNodeHasBreakpoint);
+    TestEqual(TEXT("Snapshot records node type"), Snapshot.CurrentNodeType, EDialogueNodeType::Speech);
+    TestEqual(TEXT("Snapshot records current line index"), Snapshot.CurrentLineIndex, 0);
+    TestEqual(TEXT("Snapshot records history"), Snapshot.History.Num(), 1);
+    TestTrue(TEXT("Snapshot records seen hashes"), Snapshot.SeenDialogueHashes.Num() >= 1);
+    TestEqual(TEXT("Snapshot records one outgoing edge"), Snapshot.OutgoingEdges.Num(), 1);
+    if (Snapshot.OutgoingEdges.IsValidIndex(0))
+    {
+        TestEqual(TEXT("Snapshot records outgoing target"), Snapshot.OutgoingEdges[0].TargetNodeGuid, AfterSpeechGuid);
+        TestEqual(TEXT("Snapshot records outgoing condition"), Snapshot.OutgoingEdges[0].ConditionExpression, FString(TEXT("Chronicle.Variable.Score >= 1")));
+        TestTrue(TEXT("Snapshot evaluates outgoing condition"), Snapshot.OutgoingEdges[0].bConditionPasses);
+    }
+
+    bool bFoundScoreSnapshot = false;
+    for (const FChronicleDialogueDebuggerVariableSnapshot& VariableSnapshot : Snapshot.Variables)
+    {
+        if (VariableSnapshot.VariableTag == ScoreTag)
+        {
+            bFoundScoreSnapshot = true;
+            TestEqual(TEXT("Snapshot records variable scope"), VariableSnapshot.Scope, EChronicleVariableScope::Local);
+            TestEqual(TEXT("Snapshot records variable value"), VariableSnapshot.Value.IntValue, 2);
+            break;
+        }
+    }
+    TestTrue(TEXT("Snapshot includes initialized tree variable"), bFoundScoreSnapshot);
 
     FChronicleSoftLockMetadata TreeLock;
     TestTrue(TEXT("Tree lock can be acquired"), UChronicleDialogueEditorLibrary::AcquireDialogueTreeLock(Tree, TEXT("Automation"), TreeLock, Error));
@@ -347,6 +384,48 @@ bool FChronicleEditorDebuggerAndLockTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Database lock is marked locked"), Database->EditorLock.bLocked);
     TestTrue(TEXT("Database lock can be released"), UChronicleDialogueEditorLibrary::ReleaseDialogueDatabaseLock(Database, Error));
     TestFalse(TEXT("Database lock released"), Database->EditorLock.bLocked);
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleEditorPipelineToolsTest, "Chronicle.Editor.Pipeline.Tools", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleEditorPipelineToolsTest::RunTest(const FString& Parameters)
+{
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    Tree->TreeGuid = FGuid::NewGuid();
+
+    const FGameplayTag ScoreTag = UGameplayTagsManager::Get().RequestGameplayTag(FName(TEXT("Chronicle.Variable.Score")), false);
+    FVariableDefinition ScoreDefinition;
+    ScoreDefinition.VariableTag = ScoreTag;
+    ScoreDefinition.DefaultValue = FVariableValue::MakeInt(5);
+    Tree->Variables.Add(ScoreDefinition);
+
+    FString Error;
+    FGuid RootGuid;
+    FGuid SpeechGuid;
+    TestTrue(TEXT("Root node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Root, FVector2D::ZeroVector, RootGuid, Error));
+    TestTrue(TEXT("Speech node can be added"), UChronicleDialogueEditorLibrary::AddDialogueNode(Tree, EDialogueNodeType::Speech, FVector2D(200.0f, 0.0f), SpeechGuid, Error));
+    FDialogueEdge Edge;
+    TestTrue(TEXT("Root can link to speech"), UChronicleDialogueEditorLibrary::AddDialogueEdge(Tree, RootGuid, SpeechGuid, 0, FString(), Edge, Error));
+
+    FChronicleConditionExpressionValidationResult ValidationResult;
+    TestTrue(TEXT("Condition expression validates against tree variables"), UChronicleDialogueEditorLibrary::ValidateConditionExpressionForTree(Tree, TEXT("Chronicle.Variable.Score >= 3"), ValidationResult, Error));
+    TestTrue(TEXT("Condition expression parsed"), ValidationResult.bParsed);
+    TestTrue(TEXT("Condition expression evaluates true"), ValidationResult.bEvaluationResult);
+    TestTrue(TEXT("Condition expression captures variable reference"), ValidationResult.VariableReferences.Contains(TEXT("Chronicle.Variable.Score")));
+
+    FChronicleConditionExpressionValidationResult InvalidValidationResult;
+    TestFalse(TEXT("Invalid condition expression is rejected"), UChronicleDialogueEditorLibrary::ValidateConditionExpressionForTree(Tree, TEXT("Chronicle.Variable.Score >="), InvalidValidationResult, Error));
+    TestFalse(TEXT("Invalid condition expression is not parsed"), InvalidValidationResult.bParsed);
+    TestTrue(TEXT("Invalid condition expression reports an error"), !Error.IsEmpty());
+
+    const FString ExportDirectory = FPaths::ProjectSavedDir() / TEXT("Automation/ChroniclePipelineTools");
+    FChronicleDialoguePipelineExportPaths ExportPaths;
+    TestTrue(TEXT("Pipeline artifacts export"), UChronicleDialogueEditorLibrary::ExportDialogueTreePipelineArtifacts(Tree, ExportDirectory, TEXT("en"), ExportPaths, Error));
+    TestTrue(TEXT("JSON export exists"), IFileManager::Get().FileExists(*ExportPaths.JsonFilePath));
+    TestTrue(TEXT("Lines CSV export exists"), IFileManager::Get().FileExists(*ExportPaths.LinesCsvFilePath));
+    TestTrue(TEXT("Localization CSV export exists"), IFileManager::Get().FileExists(*ExportPaths.LocalizationCsvFilePath));
+    TestTrue(TEXT("Audit JSON export exists"), IFileManager::Get().FileExists(*ExportPaths.AuditJsonFilePath));
 
     return true;
 }

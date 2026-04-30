@@ -66,6 +66,37 @@ Each CSV row creates a Speech node with one `FDialogueLine`. `NextLineID` create
 
 `UDialogueImporterBase` is the extension point for project-specific importers. `UChronicleCsvDialogueImporter` implements the built-in script CSV importer and can replace the target tree or append new rows.
 
+## Content Browser Pipeline Actions
+
+The v0.11 editor pipeline pass adds Dialogue Tree asset actions for day-to-day production handoff.
+
+Right-click one or more Dialogue Tree assets and choose:
+
+- `Export Chronicle Pipeline Artifacts...`: exports JSON, dialogue-line CSV, localization CSV, and audit JSON.
+- `Import Chronicle Script CSV...`: replaces the selected tree from an Excel-authored CSV script.
+
+The same export workflow is available in C++ and Blueprint through `UChronicleDialogueEditorLibrary::ExportDialogueTreePipelineArtifacts`.
+
+Default output files:
+
+- `{Tree}.dialogue.json`
+- `{Tree}.lines.csv`
+- `{Tree}.localization.csv`
+- `{Tree}.audit.json`
+
+`BuildDefaultDialogueTreeExportPaths` can be used when tooling needs to preview or customize the file paths before export.
+
+## Condition Expression Validation
+
+`UChronicleDialogueEditorLibrary::ValidateConditionExpressionForTree` validates an expression against a tree's variable defaults. It returns:
+
+- parse status
+- evaluation result
+- variable references found in the expression
+- a short editor-facing message
+
+This is intended for Details panels, custom expression widgets, and pipeline checks before handoff.
+
 ## Localization Gather Workflow
 
 The v0.8 localization pass adds key-stable gather and translation import helpers:

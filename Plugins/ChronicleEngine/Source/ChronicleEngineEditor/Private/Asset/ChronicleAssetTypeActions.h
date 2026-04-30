@@ -3,6 +3,7 @@
 #include "AssetTypeActions_Base.h"
 
 class IToolkitHost;
+class UDialogueTree;
 
 class FChronicleAssetTypeActionsBase : public FAssetTypeActions_Base
 {
@@ -16,7 +17,12 @@ class FAssetTypeActions_DialogueTree final : public FChronicleAssetTypeActionsBa
 public:
     virtual FText GetName() const override;
     virtual UClass* GetSupportedClass() const override;
+    virtual void GetActions(const TArray<UObject*>& InObjects, FMenuBuilder& MenuBuilder) override;
     virtual void OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor = TSharedPtr<IToolkitHost>()) override;
+
+private:
+    void ExecuteExportPipelineArtifacts(TArray<TWeakObjectPtr<UDialogueTree>> Trees) const;
+    void ExecuteImportScriptCsv(TArray<TWeakObjectPtr<UDialogueTree>> Trees) const;
 };
 
 class FAssetTypeActions_DialogueDatabase final : public FChronicleAssetTypeActionsBase

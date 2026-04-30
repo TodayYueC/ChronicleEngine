@@ -18,6 +18,7 @@ public class ChronicleEngineEditor : ModuleRules
         PrivateDependencyModuleNames.AddRange(new[]
         {
             "AssetTools",
+            "DesktopPlatform",
             "EditorFramework",
             "GraphEditor",
             "InputCore",

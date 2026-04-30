@@ -2,7 +2,7 @@
 
 Chronicle Engine is an MIT-licensed Unreal Engine 5 plugin for JRPG-style dialogue and narrative systems. It ships as a source plugin plus a minimal host project for compiling, testing, and validating the full workflow.
 
-- Current development version: `v0.10.0-dev`
+- Current development version: `v0.11.0-dev`
 - Latest packaged release: `v0.5.0`
 - Primary engine baseline: UE 5.3
 - Compatibility smoke target: UE 5.7
@@ -33,6 +33,8 @@ Main capabilities:
 - `UChronicleExampleQuestAdapter` as a sample bridge from dialogue events to project quest/state systems.
 - Native Slate Dialogue Tree editor with graph creation, links, Details editing, validation, search, copy/paste/duplicate/delete, breakpoints, debug snapshots, and soft locks.
 - JSON tree import/export, CSV line import/export, CSV script import, localization gather/import, culture-specific voice-table lookup, validation, and audit reports.
+- Content Browser actions for Dialogue Tree pipeline export and script CSV import.
+- Editor condition-expression validation helpers and debugger snapshots that expose current node data, variables, history, seen-line hashes, and outgoing edge condition results.
 - `UDialogueImporterBase` and `UChronicleCsvDialogueImporter` as source-first importer extension points.
 - `UChronicleDialoguePresentationController`, `UChronicleDialogueWidget`, and `UChronicleDialogueDefaultWidget` for UI integration.
 - Automation coverage for runtime, editor, presentation, pipeline, localization, audit, and integration flows.
@@ -79,10 +81,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 Current verification status:
 
 - UE 5.3 build passes.
-- UE 5.3 `Chronicle` automation tests pass: 33/33.
+- UE 5.3 `Chronicle` automation tests pass: 34/34.
 - UE 5.7 build smoke passes.
 - UE 5.3 BuildPlugin packaging passes for the latest packaged release.
-- 100-node condition traversal budget: `0.25ms`; latest run: `0.2092ms`.
+- 100-node condition traversal budget: `0.25ms`; latest run: `0.0458ms`.
 
 ## 4. Create Assets
 
@@ -140,8 +142,9 @@ The custom editor supports:
 - selected-node Details editing
 - node search
 - validation summaries
-- breakpoints and debug snapshots
+- breakpoints and debug snapshots with variables, history, seen-line hashes, and outgoing edge condition results
 - Dialogue Tree / Dialogue Database soft-lock metadata
+- right-click Dialogue Tree asset actions for pipeline export and script CSV import
 
 Recommended first graph:
 
@@ -176,6 +179,8 @@ Examples:
 ```text
 Chronicle.Variable.Name == "Alice" OR Chronicle.Variable.Score > 80
 ```
+
+Editor tools can validate an expression against a Dialogue Tree with `ValidateConditionExpressionForTree`. The validation result reports parse status, evaluation result, variable references, and a message suitable for Details panels or custom editor widgets.
 
 ## 7. Runtime Integration
 
@@ -367,6 +372,15 @@ It provides:
 
 Audit reports include node/edge counts, speech line counts, choice counts, word counts, speaker line stats, variable usage, broken edges, unreachable nodes, and validation issue totals.
 
+`UChronicleDialogueEditorLibrary` also provides one-call production export through `ExportDialogueTreePipelineArtifacts`. The helper writes:
+
+- `{Tree}.dialogue.json`
+- `{Tree}.lines.csv`
+- `{Tree}.localization.csv`
+- `{Tree}.audit.json`
+
+In the Content Browser, right-click a Dialogue Tree and choose `Export Chronicle Pipeline Artifacts...` to run the same export workflow. Choose `Import Chronicle Script CSV...` to replace the selected tree from an Excel-authored CSV script.
+
 ### CSV Script Import
 
 For an Excel-authored workflow, export your sheet as CSV and import it with `ImportDialogueScriptCsvString`, `ImportDialogueScriptCsvFile`, or `UChronicleCsvDialogueImporter`.
@@ -480,6 +494,8 @@ BindPresentationController(PresentationController);
 - `UChronicleExampleQuestAdapter` 作为任务/状态系统接入示例。
 - 原生 Slate 对话树编辑器，支持节点创建、连线、Details 编辑、验证、搜索、复制、粘贴、复制副本、删除、断点、调试快照和软锁。
 - JSON 导入导出、CSV 文本导入导出、CSV 脚本导入、本地化 gather/import、按语言查找语音表、结构验证和审计报告。
+- Dialogue Tree 资产右键菜单支持管线导出和脚本 CSV 导入。
+- 编辑器条件表达式校验工具和调试快照可查看当前节点、变量、历史、已看对白哈希和输出边条件结果。
 - `UDialogueImporterBase` 和 `UChronicleCsvDialogueImporter` 提供源码级导入器扩展点。
 - `UChronicleDialoguePresentationController`、`UChronicleDialogueWidget`、`UChronicleDialogueDefaultWidget` 用于 UI 接入。
 - 覆盖 Runtime、Editor、Presentation、Pipeline、Localization、Audit、Integration 的自动化测试。
@@ -526,10 +542,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 当前验证状态：
 
 - UE 5.3 编译通过。
-- UE 5.3 `Chronicle` 自动化测试通过：33/33。
+- UE 5.3 `Chronicle` 自动化测试通过：34/34。
 - UE 5.7 编译冒烟通过。
 - 最新打包版本的 UE 5.3 BuildPlugin 流程通过。
-- 100 节点条件遍历预算：`0.25ms`；最新记录：`0.2092ms`。
+- 100 节点条件遍历预算：`0.25ms`；最新记录：`0.0458ms`。
 
 ## 4. 创建资产
 
@@ -587,8 +603,9 @@ Dialogue Database 集中管理：
 - 选中节点 Details 编辑
 - 节点搜索
 - 验证摘要
-- 断点和调试快照
+- 断点和调试快照，可查看变量、历史、已看对白哈希和输出边条件结果
 - Dialogue Tree / Dialogue Database 软锁元数据
+- Dialogue Tree 资产右键菜单中的管线导出和脚本 CSV 导入
 
 推荐的第一棵树：
 
@@ -623,6 +640,8 @@ Condition 节点、边条件和 Choice 可见性都使用 Chronicle 条件表达
 ```text
 Chronicle.Variable.Name == "Alice" OR Chronicle.Variable.Score > 80
 ```
+
+编辑器工具可以通过 `ValidateConditionExpressionForTree` 按某棵 Dialogue Tree 的变量默认值校验表达式。返回结果包含解析状态、求值结果、变量引用列表和可显示给编辑器面板的消息。
 
 ## 7. Runtime 接入
 
@@ -813,6 +832,15 @@ DefaultWidget->BindPresentationController(Presentation);
 - `ExportDialogueAuditReportForTreeToJsonString`
 
 审计报告包含节点数、边数、对白行数、选项数、词数、说话人统计、变量使用情况、坏边、不可达节点和验证问题统计。
+
+`UChronicleDialogueEditorLibrary` 还提供 `ExportDialogueTreePipelineArtifacts`，用于一次性导出生产管线文件：
+
+- `{Tree}.dialogue.json`
+- `{Tree}.lines.csv`
+- `{Tree}.localization.csv`
+- `{Tree}.audit.json`
+
+在 Content Browser 中右键 Dialogue Tree，选择 `Export Chronicle Pipeline Artifacts...` 可以执行同一套导出流程。选择 `Import Chronicle Script CSV...` 可以用 Excel 导出的 CSV 脚本替换选中的树。
 
 ### CSV 脚本导入
 

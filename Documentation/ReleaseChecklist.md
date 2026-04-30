@@ -11,8 +11,8 @@
 ## Latest Verification
 
 - UE 5.3 editor build: passed.
-- UE 5.3 `Chronicle` automation suite: 21 tests passed.
-- UE 5.3 100-node condition traversal: `0.1181ms` against a `0.25ms` budget.
+- UE 5.3 `Chronicle` automation suite: 34 tests passed.
+- UE 5.3 100-node condition traversal: `0.0458ms` against a `0.25ms` budget.
 - UE 5.7 editor build smoke: passed.
 - UE 5.3 plugin package: passed.
 

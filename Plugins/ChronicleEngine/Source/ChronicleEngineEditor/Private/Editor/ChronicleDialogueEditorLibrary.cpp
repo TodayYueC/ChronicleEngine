@@ -1,9 +1,16 @@
 #include "Editor/ChronicleDialogueEditorLibrary.h"
 
+#include "Asset/ChronicleDialogueAuditLibrary.h"
+#include "Asset/ChronicleDialogueJsonLibrary.h"
 #include "Data/DialogueDatabase.h"
 #include "Data/DialogueTree.h"
+#include "HAL/FileManager.h"
 #include "HAL/PlatformProcess.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Runtime/DialogueConditionEvaluator.h"
 #include "Runtime/DialogueRunner.h"
+#include "Runtime/VariableBank.h"
 
 #define LOCTEXT_NAMESPACE "ChronicleDialogueEditorLibrary"
 
@@ -41,6 +48,81 @@ FText BuildNodeTitle(const FDialogueNode& Node)
     }
 
     return UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(Node.NodeType);
+}
+
+bool IsBlankConditionExpression(const FString& Expression)
+{
+    for (int32 Index = 0; Index < Expression.Len(); ++Index)
+    {
+        if (!FChar::IsWhitespace(Expression[Index]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool IsVariableTokenCharacter(TCHAR Character)
+{
+    return FChar::IsAlnum(Character) || Character == TEXT('.') || Character == TEXT('_');
+}
+
+void ExtractVariableReferences(const FString& Expression, TArray<FString>& OutVariableReferences)
+{
+    static const FString Prefix = TEXT("Chronicle.Variable.");
+    int32 SearchStart = 0;
+    while (SearchStart < Expression.Len())
+    {
+        const int32 PrefixIndex = Expression.Find(Prefix, ESearchCase::CaseSensitive, ESearchDir::FromStart, SearchStart);
+        if (PrefixIndex == INDEX_NONE)
+        {
+            break;
+        }
+
+        int32 EndIndex = PrefixIndex;
+        while (EndIndex < Expression.Len() && IsVariableTokenCharacter(Expression[EndIndex]))
+        {
+            ++EndIndex;
+        }
+
+        FString VariableName = Expression.Mid(PrefixIndex, EndIndex - PrefixIndex).TrimStartAndEnd();
+        while (VariableName.EndsWith(TEXT(".")))
+        {
+            VariableName.LeftChopInline(1);
+        }
+
+        if (!VariableName.IsEmpty())
+        {
+            OutVariableReferences.AddUnique(VariableName);
+        }
+
+        SearchStart = FMath::Max(EndIndex, PrefixIndex + Prefix.Len());
+    }
+}
+
+FString MakeSafeFileStem(const UObject* Object)
+{
+    FString FileStem = Object ? Object->GetName() : FString(TEXT("DialogueTree"));
+    for (TCHAR& Character : FileStem)
+    {
+        if (!FChar::IsAlnum(Character) && Character != TEXT('_') && Character != TEXT('-'))
+        {
+            Character = TEXT('_');
+        }
+    }
+    return FileStem;
+}
+
+UVariableBank* CreateVariableBankForTree(UObject* Outer, const UDialogueTree* Tree, const FDialogueSaveData* SaveData = nullptr)
+{
+    UVariableBank* VariableBank = NewObject<UVariableBank>(Outer ? Outer : GetTransientPackage());
+    const TArray<FVariableDefinition> EmptyDefinitions;
+    VariableBank->InitializeFromDefinitions(EmptyDefinitions, Tree ? Tree->Variables : EmptyDefinitions);
+    if (SaveData)
+    {
+        VariableBank->RestoreSnapshot(SaveData->GlobalVariables, SaveData->LocalVariables);
+    }
+    return VariableBank;
 }
 }
 
@@ -520,6 +602,104 @@ FText UChronicleDialogueEditorLibrary::GetNodeTypeDisplayName(EDialogueNodeType 
     }
 }
 
+bool UChronicleDialogueEditorLibrary::ValidateConditionExpressionForTree(UDialogueTree* Tree, const FString& Expression, FChronicleConditionExpressionValidationResult& OutResult, FString& OutError)
+{
+    OutResult = FChronicleConditionExpressionValidationResult();
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        OutResult.Message = OutError;
+        return false;
+    }
+
+    ExtractVariableReferences(Expression, OutResult.VariableReferences);
+
+    if (IsBlankConditionExpression(Expression))
+    {
+        OutResult.bParsed = true;
+        OutResult.bEvaluationResult = true;
+        OutResult.Message = TEXT("Expression is empty and will evaluate as true.");
+        OutError.Reset();
+        return true;
+    }
+
+    UVariableBank* VariableBank = CreateVariableBankForTree(Tree, Tree);
+    bool bSuccess = false;
+    OutResult.bEvaluationResult = UDialogueConditionEvaluator::EvaluateCondition(Expression.TrimStartAndEnd(), VariableBank, bSuccess);
+    OutResult.bParsed = bSuccess;
+    OutResult.Message = bSuccess ? TEXT("Expression parsed successfully.") : TEXT("Expression failed to parse or evaluate.");
+    OutError = bSuccess ? FString() : OutResult.Message;
+    return bSuccess;
+}
+
+bool UChronicleDialogueEditorLibrary::BuildDefaultDialogueTreeExportPaths(UDialogueTree* Tree, const FString& ExportDirectory, FChronicleDialoguePipelineExportPaths& OutPaths, FString& OutError)
+{
+    OutPaths = FChronicleDialoguePipelineExportPaths();
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    const FString CleanExportDirectory = ExportDirectory.TrimStartAndEnd().IsEmpty()
+        ? FPaths::ProjectSavedDir() / TEXT("ChronicleExports")
+        : ExportDirectory;
+    const FString FileStem = MakeSafeFileStem(Tree);
+
+    OutPaths.JsonFilePath = CleanExportDirectory / FString::Printf(TEXT("%s.dialogue.json"), *FileStem);
+    OutPaths.LinesCsvFilePath = CleanExportDirectory / FString::Printf(TEXT("%s.lines.csv"), *FileStem);
+    OutPaths.LocalizationCsvFilePath = CleanExportDirectory / FString::Printf(TEXT("%s.localization.csv"), *FileStem);
+    OutPaths.AuditJsonFilePath = CleanExportDirectory / FString::Printf(TEXT("%s.audit.json"), *FileStem);
+
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueEditorLibrary::ExportDialogueTreePipelineArtifacts(UDialogueTree* Tree, const FString& ExportDirectory, const FString& Culture, FChronicleDialoguePipelineExportPaths& OutPaths, FString& OutError)
+{
+    if (!BuildDefaultDialogueTreeExportPaths(Tree, ExportDirectory, OutPaths, OutError))
+    {
+        return false;
+    }
+
+    IFileManager::Get().MakeDirectory(*FPaths::GetPath(OutPaths.JsonFilePath), true);
+
+    if (!UChronicleDialogueJsonLibrary::ExportDialogueTreeToJsonFile(Tree, OutPaths.JsonFilePath, OutError))
+    {
+        return false;
+    }
+
+    if (!UChronicleDialogueJsonLibrary::ExportDialogueLinesToCsvFile(Tree, OutPaths.LinesCsvFilePath, OutError))
+    {
+        return false;
+    }
+
+    FString LocalizationCsv;
+    if (!UChronicleDialogueJsonLibrary::ExportLocalizationCsvFromTree(Tree, TEXT("Project.Dialogue"), Culture, LocalizationCsv, OutError))
+    {
+        return false;
+    }
+    if (!FFileHelper::SaveStringToFile(LocalizationCsv, *OutPaths.LocalizationCsvFilePath))
+    {
+        OutError = FString::Printf(TEXT("Failed to save localization CSV file: %s"), *OutPaths.LocalizationCsvFilePath);
+        return false;
+    }
+
+    FString AuditJson;
+    if (!UChronicleDialogueAuditLibrary::ExportDialogueAuditReportForTreeToJsonString(Tree, AuditJson, OutError))
+    {
+        return false;
+    }
+    if (!FFileHelper::SaveStringToFile(AuditJson, *OutPaths.AuditJsonFilePath))
+    {
+        OutError = FString::Printf(TEXT("Failed to save audit JSON file: %s"), *OutPaths.AuditJsonFilePath);
+        return false;
+    }
+
+    OutError.Reset();
+    return true;
+}
+
 bool UChronicleDialogueEditorLibrary::CaptureDebuggerSnapshot(UDialogueRunner* Runner, FChronicleDialogueDebuggerSnapshot& OutSnapshot, FString& OutError)
 {
     OutSnapshot = FChronicleDialogueDebuggerSnapshot();
@@ -535,12 +715,60 @@ bool UChronicleDialogueEditorLibrary::CaptureDebuggerSnapshot(UDialogueRunner* R
     OutSnapshot.CurrentNodeGuid = Runner->GetCurrentNodeGuid();
     OutSnapshot.RunnerState = Runner->GetRunnerState();
 
+    FDialogueSaveData SaveData;
+    Runner->SaveState(SaveData);
+    OutSnapshot.CurrentLineIndex = SaveData.CurrentLineIndex;
+    OutSnapshot.History = SaveData.History;
+    OutSnapshot.SeenDialogueHashes = SaveData.SeenDialogueHashes;
+
+    for (const TPair<FGameplayTag, FVariableValue>& VariablePair : SaveData.GlobalVariables)
+    {
+        FChronicleDialogueDebuggerVariableSnapshot& Variable = OutSnapshot.Variables.AddDefaulted_GetRef();
+        Variable.VariableTag = VariablePair.Key;
+        Variable.Value = VariablePair.Value;
+        Variable.Scope = EChronicleVariableScope::Global;
+    }
+    for (const TPair<FGameplayTag, FVariableValue>& VariablePair : SaveData.LocalVariables)
+    {
+        FChronicleDialogueDebuggerVariableSnapshot& Variable = OutSnapshot.Variables.AddDefaulted_GetRef();
+        Variable.VariableTag = VariablePair.Key;
+        Variable.Value = VariablePair.Value;
+        Variable.Scope = EChronicleVariableScope::Local;
+    }
+
+    OutSnapshot.Variables.Sort([](const FChronicleDialogueDebuggerVariableSnapshot& Left, const FChronicleDialogueDebuggerVariableSnapshot& Right)
+    {
+        return Left.VariableTag.ToString() < Right.VariableTag.ToString();
+    });
+
     if (CurrentTree)
     {
         OutSnapshot.bNodeHasBreakpoint = CurrentTree->HasBreakpoint(OutSnapshot.CurrentNodeGuid);
         if (const FDialogueNode* Node = CurrentTree->FindNode(OutSnapshot.CurrentNodeGuid))
         {
+            OutSnapshot.CurrentNodeType = Node->NodeType;
             OutSnapshot.NodeTitle = BuildNodeTitle(*Node);
+        }
+
+        UVariableBank* VariableBank = CreateVariableBankForTree(CurrentTree, CurrentTree, &SaveData);
+        TArray<FDialogueEdge> OutgoingEdges;
+        CurrentTree->GetOutgoingEdges(OutSnapshot.CurrentNodeGuid, OutgoingEdges);
+        for (const FDialogueEdge& Edge : OutgoingEdges)
+        {
+            FChronicleDialogueDebuggerEdgeSnapshot& EdgeSnapshot = OutSnapshot.OutgoingEdges.AddDefaulted_GetRef();
+            EdgeSnapshot.TargetNodeGuid = Edge.ToNodeGuid;
+            EdgeSnapshot.FromSlotIndex = Edge.FromSlotIndex;
+            EdgeSnapshot.ConditionExpression = Edge.ConditionExpression;
+            EdgeSnapshot.Weight = Edge.Weight;
+            if (IsBlankConditionExpression(Edge.ConditionExpression))
+            {
+                EdgeSnapshot.bConditionPasses = true;
+            }
+            else
+            {
+                bool bConditionParsed = false;
+                EdgeSnapshot.bConditionPasses = UDialogueConditionEvaluator::EvaluateCondition(Edge.ConditionExpression, VariableBank, bConditionParsed) && bConditionParsed;
+            }
         }
     }
 

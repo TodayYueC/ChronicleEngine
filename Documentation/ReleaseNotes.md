@@ -1,5 +1,23 @@
 # Chronicle Engine Release Notes
 
+## 0.11.0-dev Editor Pipeline And Debugger Tools Pass
+
+This development pass completes the current Phase 1 and Phase 2 iteration: editor asset-pipeline commands, condition validation, and richer debugger snapshots.
+
+### Highlights
+
+- Added Dialogue Tree Content Browser actions for `Export Chronicle Pipeline Artifacts...` and `Import Chronicle Script CSV...`.
+- Added `ExportDialogueTreePipelineArtifacts`, which writes JSON, dialogue-line CSV, localization CSV, and audit JSON in one workflow.
+- Added `ValidateConditionExpressionForTree` for editor-side condition checks against a tree's variable defaults.
+- Expanded debugger snapshots with current node type, line index, variable values and scopes, history, seen-line hashes, and outgoing edge condition results.
+- Added automation coverage for the new pipeline tools and expanded debugger snapshot state.
+
+### Verification
+
+- UE 5.3 editor build: passed.
+- UE 5.3 `Chronicle` automation suite: 34 tests passed.
+- 100-node condition traversal recorded `0.0458ms`.
+
 ## 0.10.0-dev CSV Script Import Pass
 
 This development pass adds an Excel-friendly script CSV import workflow and a reusable importer extension point.

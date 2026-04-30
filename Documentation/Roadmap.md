@@ -1,5 +1,40 @@
 # Chronicle Engine Roadmap
 
+## Four-Phase Execution Plan
+
+Future iterations should follow these four phases unless the user explicitly changes the plan.
+
+### Phase 1: Editor And Asset Pipeline Closeout
+
+Status: complete for the `v0.11.0-dev` iteration.
+
+- Dialogue Tree editor remains usable for creation, graph editing, Details editing, validation, search, duplicate/delete, breakpoints, and soft locks.
+- Asset pipeline now has Content Browser actions for Dialogue Tree pipeline export and script CSV import.
+- `UChronicleDialogueEditorLibrary::ExportDialogueTreePipelineArtifacts` exports JSON, line CSV, localization CSV, and audit JSON in one call.
+- `ValidateConditionExpressionForTree` validates condition expressions against a tree's variable defaults and reports parse result, evaluation result, and variable references.
+
+### Phase 2: Debugger And Runtime Completion
+
+Status: complete for the `v0.11.0-dev` iteration.
+
+- Debugger snapshots now expose current node type, current line index, variables, history, seen-line hashes, and outgoing edge condition results.
+- Snapshot edge evaluation uses the runner's saved variable state, so editor debugging reflects the live traversal branch context.
+- Automation now covers the expanded debugger snapshot and the editor pipeline tools.
+
+### Phase 3: Presentation And Demo Polish
+
+Status: planned next.
+
+- Add optional source-first demo wiring and user-facing setup polish around the default widget, controller, and demo actor.
+- Keep binary sample assets optional and out of source control unless a release package explicitly needs them.
+
+### Phase 4: Release, CI, Compatibility, And Final Acceptance
+
+Status: planned after Phase 3.
+
+- Re-run UE 5.3 build/tests, UE 5.7 smoke, package validation, release checklist, and final PRD comparison.
+- Prepare version tag, GitHub Release assets, and final documentation pass.
+
 ## M1 Runtime Vertical Slice
 
 Acceptance:
@@ -10,7 +45,7 @@ Acceptance:
 
 ## M2 Asset Pipeline
 
-Status: complete for the v0.10 CSV script import pass.
+Status: complete for the v0.11 editor pipeline tools pass.
 
 - Stable JSON import/export with schema marker and deterministic node/edge ordering.
 - CSV export/import for localization and writer text handoff.
@@ -21,18 +56,21 @@ Status: complete for the v0.10 CSV script import pass.
 - Dialogue audit reports through `UChronicleDialogueAuditLibrary`, covering node/edge counts, line/choice/word counts, speaker stats, variable usage, broken edges, unreachable nodes, and validation totals.
 - CSV script import through `ImportDialogueScriptCsvString`, `ImportDialogueScriptCsvFile`, and `UChronicleCsvDialogueImporter`, creating runnable graph topology from Excel-authored rows.
 - Importer extensibility through `UDialogueImporterBase`.
-- Remaining pipeline polish moves to v1.0: richer external spreadsheet templates, XLSX helpers, and editor menu commands.
+- Content Browser asset actions now expose one-click pipeline export and script CSV import for Dialogue Tree assets.
+- `ExportDialogueTreePipelineArtifacts` writes JSON, dialogue-line CSV, localization CSV, and audit JSON together.
+- Remaining pipeline polish moves to v1.0: richer external spreadsheet templates and optional XLSX helpers.
 
 ## M3 Editor Experience
 
-Status: complete for the v0.6 editor workflow pass.
+Status: complete for the v0.11 editor workflow pass.
 
 - Dialogue Tree assets open in a Chronicle custom asset editor instead of the default details-only view.
 - Added a native `SGraphEditor` view backed by Chronicle EdGraph/Node/Schema classes, with search selection, validation summary, toolbar and all-PRD-node context-menu creation, graph-position persistence, pin connection edge creation, pin break edge deletion, and conditional edge create/delete controls.
 - Added editor helper APIs for node creation, node movement, node duplication, node deletion cleanup, edge editing, node search, and node display names.
 - Added toolbar and graph-command support for copy, paste, duplicate, delete, and zoom-to-fit operations.
-- Added selected-node Details editing, breakpoint metadata, debugger snapshot support, and Dialogue Tree / Dialogue Database soft-lock metadata.
-- Remaining editor-adjacent polish moves to localization/audit/release hardening: richer expression widgets, live PIE debugger polish, localization gather commands, and audit reports.
+- Added selected-node Details editing, breakpoint metadata, expanded debugger snapshots, and Dialogue Tree / Dialogue Database soft-lock metadata.
+- Added expression validation helper APIs for editor Details panels and future expression widgets.
+- Remaining editor-adjacent polish moves to release hardening: richer live PIE debugger UI and optional expression-authoring widgets.
 
 ## M4 Presentation
 
@@ -77,11 +115,22 @@ Status: complete for the v0.9 integration pass.
 
 ## M7 Script Import Workflow
 
-Status: current v0.10 script import pass.
+Status: complete for the v0.10 script import pass.
 
 - Added an Excel-friendly CSV script importer that creates Speech nodes, optional Event nodes, and edges from fixed columns.
 - Required script columns are `LineID` and `Text`; optional columns cover speaker, emotion, voice, wait time, next line, condition, event tag, payload, and async flag.
 - Added `UDialogueImporterBase` for future Articy, Twine, Ren'Py, or project-specific importers.
 - Added `UChronicleCsvDialogueImporter` as the default importer implementation.
 - Added automation coverage proving imported CSV topology can run through `UDialogueRunner`.
-- UE 5.3 automation now covers 33 Chronicle tests; latest 100-node condition traversal run recorded `0.2092ms`.
+- UE 5.3 automation covered 33 Chronicle tests; latest 100-node condition traversal run recorded `0.2092ms`.
+
+## M8 Editor Pipeline And Debugger Tools
+
+Status: current `v0.11.0-dev` Phase 1 + Phase 2 iteration.
+
+- Added Dialogue Tree Content Browser actions for `Export Chronicle Pipeline Artifacts...` and `Import Chronicle Script CSV...`.
+- Added `FChronicleDialoguePipelineExportPaths` and `ExportDialogueTreePipelineArtifacts` for one-call production handoff files.
+- Added `FChronicleConditionExpressionValidationResult` and `ValidateConditionExpressionForTree`.
+- Expanded `FChronicleDialogueDebuggerSnapshot` with node type, line index, variables, outgoing edges, history, and seen dialogue hashes.
+- Added automation coverage for editor pipeline tools and expanded debugger snapshots.
+- UE 5.3 automation now covers 34 Chronicle tests; latest 100-node condition traversal run recorded `0.0458ms`.
