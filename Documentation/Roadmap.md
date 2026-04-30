@@ -10,7 +10,7 @@ Acceptance:
 
 ## M2 Asset Pipeline
 
-Status: complete for the v0.9 audit pipeline pass.
+Status: complete for the v0.10 CSV script import pass.
 
 - Stable JSON import/export with schema marker and deterministic node/edge ordering.
 - CSV export/import for localization and writer text handoff.
@@ -19,7 +19,9 @@ Status: complete for the v0.9 audit pipeline pass.
 - Culture-specific voice-table lookup through `UDialogueDatabase::CultureVoiceTables` and `ResolveVoiceTableForCulture`.
 - Dialogue-tree validation for missing root, broken edges, duplicate node GUIDs, empty content warnings, and unreachable nodes.
 - Dialogue audit reports through `UChronicleDialogueAuditLibrary`, covering node/edge counts, line/choice/word counts, speaker stats, variable usage, broken edges, unreachable nodes, and validation totals.
-- Remaining pipeline polish moves to v1.0: richer external spreadsheet templates and editor menu commands.
+- CSV script import through `ImportDialogueScriptCsvString`, `ImportDialogueScriptCsvFile`, and `UChronicleCsvDialogueImporter`, creating runnable graph topology from Excel-authored rows.
+- Importer extensibility through `UDialogueImporterBase`.
+- Remaining pipeline polish moves to v1.0: richer external spreadsheet templates, XLSX helpers, and editor menu commands.
 
 ## M3 Editor Experience
 
@@ -64,7 +66,7 @@ Status: current release-candidate hardening pass.
 
 ## M6 Integration And Audit
 
-Status: current v0.9 integration pass.
+Status: complete for the v0.9 integration pass.
 
 - Added standard dialogue event tags for quest, game-state, actor animation, battle encounter, and scene load integration.
 - Added `UChronicleExampleQuestAdapter`, a source example that binds to `UDialogueRunner::OnDialogueEvent` and rebroadcasts project-facing quest/state delegates.
@@ -72,3 +74,14 @@ Status: current v0.9 integration pass.
 - Added editor audit reports for production review, localization readiness, and release checks.
 - Added automation coverage for the integration adapter and audit report JSON export.
 - UE 5.3 automation now covers 32 Chronicle tests; latest 100-node condition traversal run recorded `0.0986ms`.
+
+## M7 Script Import Workflow
+
+Status: current v0.10 script import pass.
+
+- Added an Excel-friendly CSV script importer that creates Speech nodes, optional Event nodes, and edges from fixed columns.
+- Required script columns are `LineID` and `Text`; optional columns cover speaker, emotion, voice, wait time, next line, condition, event tag, payload, and async flag.
+- Added `UDialogueImporterBase` for future Articy, Twine, Ren'Py, or project-specific importers.
+- Added `UChronicleCsvDialogueImporter` as the default importer implementation.
+- Added automation coverage proving imported CSV topology can run through `UDialogueRunner`.
+- UE 5.3 automation now covers 33 Chronicle tests; latest 100-node condition traversal run recorded `0.2092ms`.

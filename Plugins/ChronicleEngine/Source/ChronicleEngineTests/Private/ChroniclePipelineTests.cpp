@@ -2,10 +2,13 @@
 
 #include "Asset/ChronicleDialogueAuditLibrary.h"
 #include "Asset/ChronicleDialogueJsonLibrary.h"
+#include "Asset/DialogueImporterBase.h"
+#include "ChronicleTestListener.h"
 #include "Data/DialogueDatabase.h"
 #include "Data/DialogueTree.h"
 #include "Engine/DataTable.h"
 #include "GameplayTagsManager.h"
+#include "Runtime/DialogueRunner.h"
 
 namespace ChroniclePipelineTests
 {
@@ -127,6 +130,63 @@ bool FChronicleCsvExportImportTest::RunTest(const FString& Parameters)
     {
         TestEqual(TEXT("Translated text is imported"), UpdatedNode->Lines[0].Text.ToString(), FString(TEXT("Greetings, traveler.")));
     }
+
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FChronicleCsvScriptImportTest, "Chronicle.Pipeline.Csv.ScriptImport", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FChronicleCsvScriptImportTest::RunTest(const FString& Parameters)
+{
+    UDialogueTree* Tree = NewObject<UDialogueTree>();
+    const FString Csv =
+        TEXT("LineID,SpeakerTag,Text,EmotionTag,VoiceID,NextLineID,ConditionExpression,EventTag,EventPayload,bEventIsAsync\n")
+        TEXT("Line_001,Chronicle.Speaker.Alice,\"Hello from sheet\",,VO_001,Line_002,Chronicle.Variable.Flag == true,Chronicle.Event.Quest.Update,\"QuestTag=Chronicle.Quest.Main;ObjectiveIndex=1\",false\n")
+        TEXT("Line_002,Chronicle.Speaker.Alice,\"Imported ending\",,VO_002,,,,,\n");
+
+    UChronicleCsvDialogueImporter* Importer = NewObject<UChronicleCsvDialogueImporter>();
+    FString Error;
+    TestTrue(TEXT("CSV script importer succeeds"), Importer->ImportFromString(Tree, Csv, Error));
+    TestEqual(TEXT("Script import creates root, speech nodes, and event node"), Tree->Nodes.Num(), 4);
+    TestEqual(TEXT("Script import creates root, conditional event, and continuation edges"), Tree->Edges.Num(), 3);
+    TestTrue(TEXT("Imported root node is valid"), Tree->RootNodeGuid.IsValid());
+
+    const FDialogueNode* FirstSpeech = Tree->Nodes.FindByPredicate([](const FDialogueNode& Node)
+    {
+        return Node.NodeType == EDialogueNodeType::Speech && Node.Lines.Num() > 0 && Node.Lines[0].LineID == TEXT("Line_001");
+    });
+    TestNotNull(TEXT("First imported speech exists"), FirstSpeech);
+    if (FirstSpeech)
+    {
+        TestEqual(TEXT("Imported line text matches CSV"), FirstSpeech->Lines[0].Text.ToString(), FString(TEXT("Hello from sheet")));
+        TestEqual(TEXT("Imported voice id matches CSV"), FirstSpeech->Lines[0].VoiceID, FName(TEXT("VO_001")));
+    }
+
+    const FDialogueNode* EventNode = Tree->Nodes.FindByPredicate([](const FDialogueNode& Node)
+    {
+        return Node.NodeType == EDialogueNodeType::Event;
+    });
+    TestNotNull(TEXT("Script import creates event node"), EventNode);
+    if (EventNode)
+    {
+        TestEqual(TEXT("Event tag is imported"), EventNode->EventTag, ChroniclePipelineTests::Tag(TEXT("Chronicle.Event.Quest.Update")));
+        TestEqual(TEXT("Event payload is imported"), EventNode->EventPayload.FindRef(TEXT("QuestTag")), FString(TEXT("Chronicle.Quest.Main")));
+        TestEqual(TEXT("Event payload keeps additional fields"), EventNode->EventPayload.FindRef(TEXT("ObjectiveIndex")), FString(TEXT("1")));
+    }
+
+    UDialogueRunner* Runner = NewObject<UDialogueRunner>();
+    Runner->Initialize(nullptr);
+    Runner->SetVariable(ChroniclePipelineTests::Tag(TEXT("Chronicle.Variable.Flag")), FVariableValue::MakeBool(true));
+
+    UChronicleTestListener* Listener = NewObject<UChronicleTestListener>();
+    Runner->OnLineStarted.AddDynamic(Listener, &UChronicleTestListener::HandleLineStarted);
+    Runner->OnDialogueEvent.AddDynamic(Listener, &UChronicleTestListener::HandleDialogueEvent);
+
+    Runner->StartDialogue(Tree);
+    TestEqual(TEXT("Imported script starts at first line"), Listener->LastLine.Text.ToString(), FString(TEXT("Hello from sheet")));
+
+    Runner->Advance();
+    TestEqual(TEXT("Imported condition allows event to fire"), Listener->EventCount, 1);
+    TestEqual(TEXT("Imported script continues to target line"), Listener->LastLine.Text.ToString(), FString(TEXT("Imported ending")));
 
     return true;
 }

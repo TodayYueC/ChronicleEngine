@@ -2,7 +2,7 @@
 
 Chronicle Engine is an MIT-licensed Unreal Engine 5 plugin for JRPG-style dialogue and narrative systems. It ships as a source plugin plus a minimal host project for compiling, testing, and validating the full workflow.
 
-- Current development version: `v0.9.0-dev`
+- Current development version: `v0.10.0-dev`
 - Latest packaged release: `v0.5.0`
 - Primary engine baseline: UE 5.3
 - Compatibility smoke target: UE 5.7
@@ -32,7 +32,8 @@ Main capabilities:
 - GameplayTag event bus for camera, animation, audio, quest, game-state, battle, and scene events.
 - `UChronicleExampleQuestAdapter` as a sample bridge from dialogue events to project quest/state systems.
 - Native Slate Dialogue Tree editor with graph creation, links, Details editing, validation, search, copy/paste/duplicate/delete, breakpoints, debug snapshots, and soft locks.
-- JSON tree import/export, CSV line import/export, localization gather/import, culture-specific voice-table lookup, validation, and audit reports.
+- JSON tree import/export, CSV line import/export, CSV script import, localization gather/import, culture-specific voice-table lookup, validation, and audit reports.
+- `UDialogueImporterBase` and `UChronicleCsvDialogueImporter` as source-first importer extension points.
 - `UChronicleDialoguePresentationController`, `UChronicleDialogueWidget`, and `UChronicleDialogueDefaultWidget` for UI integration.
 - Automation coverage for runtime, editor, presentation, pipeline, localization, audit, and integration flows.
 
@@ -78,10 +79,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 Current verification status:
 
 - UE 5.3 build passes.
-- UE 5.3 `Chronicle` automation tests pass: 32/32.
+- UE 5.3 `Chronicle` automation tests pass: 33/33.
 - UE 5.7 build smoke passes.
 - UE 5.3 BuildPlugin packaging passes for the latest packaged release.
-- 100-node condition traversal budget: `0.25ms`; latest run: `0.0986ms`.
+- 100-node condition traversal budget: `0.25ms`; latest run: `0.2092ms`.
 
 ## 4. Create Assets
 
@@ -349,6 +350,8 @@ It provides:
 - `ImportDialogueTreeFromJsonString`
 - `ExportDialogueLinesToCsvString`
 - `ImportDialogueLinesFromCsvString`
+- `ImportDialogueScriptCsvString`
+- `ImportDialogueScriptCsvFile`
 - `EnsureStableLineIds`
 - `GatherDialogueTextsFromTree`
 - `GatherDialogueTextsFromDatabase`
@@ -363,6 +366,29 @@ It provides:
 - `ExportDialogueAuditReportForTreeToJsonString`
 
 Audit reports include node/edge counts, speech line counts, choice counts, word counts, speaker line stats, variable usage, broken edges, unreachable nodes, and validation issue totals.
+
+### CSV Script Import
+
+For an Excel-authored workflow, export your sheet as CSV and import it with `ImportDialogueScriptCsvString`, `ImportDialogueScriptCsvFile`, or `UChronicleCsvDialogueImporter`.
+
+Required columns:
+
+- `LineID`
+- `Text`
+
+Optional columns:
+
+- `SpeakerTag` or `Speaker`
+- `EmotionTag`
+- `VoiceID`
+- `WaitTime`
+- `NextLineID`, `NextLine`, or `TargetLineID`
+- `ConditionExpression` or `Condition`
+- `EventTag`
+- `EventPayload`
+- `bEventIsAsync`, `EventAsync`, or `Async`
+
+`NextLineID` creates dialogue edges. `ConditionExpression` becomes the outgoing edge condition. `EventTag` inserts an Event node after the speech line, with `EventPayload` parsed from `Key=Value;OtherKey=OtherValue`.
 
 ## 13. Demo Actor
 
@@ -453,7 +479,8 @@ BindPresentationController(PresentationController);
 - 基于 GameplayTag 的事件总线，可接入镜头、动画、音频、任务、游戏状态、战斗和场景系统。
 - `UChronicleExampleQuestAdapter` 作为任务/状态系统接入示例。
 - 原生 Slate 对话树编辑器，支持节点创建、连线、Details 编辑、验证、搜索、复制、粘贴、复制副本、删除、断点、调试快照和软锁。
-- JSON 导入导出、CSV 文本导入导出、本地化 gather/import、按语言查找语音表、结构验证和审计报告。
+- JSON 导入导出、CSV 文本导入导出、CSV 脚本导入、本地化 gather/import、按语言查找语音表、结构验证和审计报告。
+- `UDialogueImporterBase` 和 `UChronicleCsvDialogueImporter` 提供源码级导入器扩展点。
 - `UChronicleDialoguePresentationController`、`UChronicleDialogueWidget`、`UChronicleDialogueDefaultWidget` 用于 UI 接入。
 - 覆盖 Runtime、Editor、Presentation、Pipeline、Localization、Audit、Integration 的自动化测试。
 
@@ -499,10 +526,10 @@ R:\UE\UE_5.3\Engine\Binaries\Win64\UnrealEditor-Cmd.exe "R:\AI_Agent\Codex\JRPGt
 当前验证状态：
 
 - UE 5.3 编译通过。
-- UE 5.3 `Chronicle` 自动化测试通过：32/32。
+- UE 5.3 `Chronicle` 自动化测试通过：33/33。
 - UE 5.7 编译冒烟通过。
 - 最新打包版本的 UE 5.3 BuildPlugin 流程通过。
-- 100 节点条件遍历预算：`0.25ms`；最新记录：`0.0986ms`。
+- 100 节点条件遍历预算：`0.25ms`；最新记录：`0.2092ms`。
 
 ## 4. 创建资产
 
@@ -770,6 +797,8 @@ DefaultWidget->BindPresentationController(Presentation);
 - `ImportDialogueTreeFromJsonString`
 - `ExportDialogueLinesToCsvString`
 - `ImportDialogueLinesFromCsvString`
+- `ImportDialogueScriptCsvString`
+- `ImportDialogueScriptCsvFile`
 - `EnsureStableLineIds`
 - `GatherDialogueTextsFromTree`
 - `GatherDialogueTextsFromDatabase`
@@ -784,6 +813,29 @@ DefaultWidget->BindPresentationController(Presentation);
 - `ExportDialogueAuditReportForTreeToJsonString`
 
 审计报告包含节点数、边数、对白行数、选项数、词数、说话人统计、变量使用情况、坏边、不可达节点和验证问题统计。
+
+### CSV 脚本导入
+
+Excel 编写流程建议先导出为 CSV，再通过 `ImportDialogueScriptCsvString`、`ImportDialogueScriptCsvFile` 或 `UChronicleCsvDialogueImporter` 导入。
+
+必填列：
+
+- `LineID`
+- `Text`
+
+可选列：
+
+- `SpeakerTag` 或 `Speaker`
+- `EmotionTag`
+- `VoiceID`
+- `WaitTime`
+- `NextLineID`、`NextLine` 或 `TargetLineID`
+- `ConditionExpression` 或 `Condition`
+- `EventTag`
+- `EventPayload`
+- `bEventIsAsync`、`EventAsync` 或 `Async`
+
+`NextLineID` 会生成对话边，`ConditionExpression` 会成为输出边条件。`EventTag` 会在对白后插入 Event 节点，`EventPayload` 使用 `Key=Value;OtherKey=OtherValue` 格式解析。
 
 ## 13. 示例 Actor
 

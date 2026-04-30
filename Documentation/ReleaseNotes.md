@@ -1,5 +1,26 @@
 # Chronicle Engine Release Notes
 
+## 0.10.0-dev CSV Script Import Pass
+
+This development pass adds an Excel-friendly script CSV import workflow and a reusable importer extension point.
+
+### Highlights
+
+- Added `ImportDialogueScriptCsvString` and `ImportDialogueScriptCsvFile`.
+- Script CSV import creates Root, Speech, Event, and Edge data directly from rows.
+- `LineID` and `Text` are required; optional columns include speaker, emotion, voice, wait time, next line, condition, event tag, event payload, and async event flag.
+- `EventPayload` supports `Key=Value;OtherKey=OtherValue` cells.
+- Added `UDialogueImporterBase` for project-specific importer extensions.
+- Added `UChronicleCsvDialogueImporter` as the built-in importer implementation.
+- Added automation coverage proving an imported CSV tree can be traversed by `UDialogueRunner`.
+
+### Verification
+
+- UE 5.3 editor build: passed.
+- UE 5.3 `Chronicle` automation suite: 33 tests passed.
+- UE 5.7 editor build smoke: passed.
+- 100-node condition traversal recorded `0.2092ms`.
+
 ## 0.9.0-dev Integration And Audit Pass
 
 This development pass adds source-first project integration examples and production audit reporting.

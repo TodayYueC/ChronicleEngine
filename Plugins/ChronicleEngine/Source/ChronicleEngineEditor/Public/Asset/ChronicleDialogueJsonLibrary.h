@@ -100,6 +100,12 @@ public:
     UFUNCTION(BlueprintCallable, Category="Chronicle|Editor|CSV")
     static bool ImportDialogueLinesFromCsvFile(UDialogueTree* Tree, const FString& FilePath, FString& OutError);
 
+    UFUNCTION(BlueprintCallable, Category="Chronicle|Editor|CSV")
+    static bool ImportDialogueScriptCsvString(UDialogueTree* Tree, const FString& Csv, bool bReplaceExisting, FString& OutError);
+
+    UFUNCTION(BlueprintCallable, Category="Chronicle|Editor|CSV")
+    static bool ImportDialogueScriptCsvFile(UDialogueTree* Tree, const FString& FilePath, bool bReplaceExisting, FString& OutError);
+
     UFUNCTION(BlueprintCallable, Category="Chronicle|Editor|Localization")
     static bool EnsureStableLineIds(UDialogueTree* Tree, int32& OutUpdatedCount, FString& OutError);
 

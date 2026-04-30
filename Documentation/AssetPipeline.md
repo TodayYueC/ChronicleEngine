@@ -33,7 +33,38 @@ Columns:
 - `WaitTime`
 - `ContextComment`
 
-Import updates existing lines by `NodeGuid` and `LineIndex`. When `TranslatedText` is filled, it replaces the line text; otherwise `SourceText` is used. Graph nodes and edges are not created by CSV import in M2.
+Import updates existing lines by `NodeGuid` and `LineIndex`. When `TranslatedText` is filled, it replaces the line text; otherwise `SourceText` is used.
+
+## CSV Script Import Workflow
+
+The v0.10 script import pass adds an Excel-friendly CSV workflow that can create graph topology, not only update existing line text.
+
+Use:
+
+- `ImportDialogueScriptCsvString`
+- `ImportDialogueScriptCsvFile`
+- `UChronicleCsvDialogueImporter`
+
+Required columns:
+
+- `LineID`
+- `Text`
+
+Optional columns:
+
+- `SpeakerTag` or `Speaker`
+- `EmotionTag`
+- `VoiceID`
+- `WaitTime`
+- `NextLineID`, `NextLine`, or `TargetLineID`
+- `ConditionExpression` or `Condition`
+- `EventTag`
+- `EventPayload`
+- `bEventIsAsync`, `EventAsync`, or `Async`
+
+Each CSV row creates a Speech node with one `FDialogueLine`. `NextLineID` creates the outgoing edge to another imported or existing line. `ConditionExpression` is copied to the outgoing edge. When `EventTag` is set, the importer inserts an Event node after the Speech node and parses `EventPayload` from semicolon-separated `Key=Value` pairs.
+
+`UDialogueImporterBase` is the extension point for project-specific importers. `UChronicleCsvDialogueImporter` implements the built-in script CSV importer and can replace the target tree or append new rows.
 
 ## Localization Gather Workflow
 

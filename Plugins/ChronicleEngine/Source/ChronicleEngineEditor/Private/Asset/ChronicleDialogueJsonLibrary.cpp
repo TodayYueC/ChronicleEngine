@@ -210,6 +210,76 @@ FGameplayTag TagFromString(const FString& TagText)
     return UGameplayTagsManager::Get().RequestGameplayTag(FName(*TagText), false);
 }
 
+int32 FindColumnAny(const TArray<FString>& Header, const TArray<FString>& Names)
+{
+    for (const FString& Name : Names)
+    {
+        const int32 Column = FindColumn(Header, Name);
+        if (Column != INDEX_NONE)
+        {
+            return Column;
+        }
+    }
+    return INDEX_NONE;
+}
+
+bool ParseBoolCell(const FString& Cell)
+{
+    const FString Normalized = Cell.TrimStartAndEnd().ToLower();
+    return Normalized == TEXT("true") || Normalized == TEXT("1") || Normalized == TEXT("yes") || Normalized == TEXT("y");
+}
+
+void ParseEventPayloadCell(const FString& PayloadCell, TMap<FName, FString>& OutPayload)
+{
+    OutPayload.Reset();
+
+    TArray<FString> Pairs;
+    PayloadCell.ParseIntoArray(Pairs, TEXT(";"), true);
+    for (const FString& Pair : Pairs)
+    {
+        FString Key;
+        FString Value;
+        if (!Pair.Split(TEXT("="), &Key, &Value))
+        {
+            continue;
+        }
+
+        Key = Key.TrimStartAndEnd();
+        Value = Value.TrimStartAndEnd();
+        if (!Key.IsEmpty())
+        {
+            OutPayload.Add(FName(*Key), Value);
+        }
+    }
+}
+
+void AddDialogueEdge(UDialogueTree* Tree, const FGuid& FromGuid, const FGuid& ToGuid, int32 SlotIndex = 0, const FString& ConditionExpression = FString())
+{
+    FDialogueEdge Edge;
+    Edge.FromNodeGuid = FromGuid;
+    Edge.ToNodeGuid = ToGuid;
+    Edge.FromSlotIndex = SlotIndex;
+    Edge.ConditionExpression = ConditionExpression;
+    Tree->Edges.Add(Edge);
+}
+
+struct FChronicleDialogueScriptCsvRow
+{
+    FName LineID;
+    FText Text;
+    FGameplayTag SpeakerTag;
+    FGameplayTag EmotionTag;
+    FName VoiceID;
+    float WaitTime = -1.0f;
+    FName NextLineID;
+    FString ConditionExpression;
+    FGameplayTag EventTag;
+    TMap<FName, FString> EventPayload;
+    bool bEventIsAsync = false;
+    FGuid SpeechNodeGuid;
+    FGuid EventNodeGuid;
+};
+
 FString GetDefaultDialogueNamespace(const FString& Namespace)
 {
     const FString TrimmedNamespace = Namespace.TrimStartAndEnd();
@@ -630,6 +700,239 @@ bool UChronicleDialogueJsonLibrary::ImportDialogueLinesFromCsvFile(UDialogueTree
     }
 
     return ImportDialogueLinesFromCsvString(Tree, Csv, OutError);
+}
+
+bool UChronicleDialogueJsonLibrary::ImportDialogueScriptCsvString(UDialogueTree* Tree, const FString& Csv, bool bReplaceExisting, FString& OutError)
+{
+    if (!Tree)
+    {
+        OutError = TEXT("No dialogue tree supplied.");
+        return false;
+    }
+
+    TArray<TArray<FString>> Rows;
+    if (!ParseCsvRows(Csv, Rows, OutError))
+    {
+        return false;
+    }
+
+    if (Rows.Num() < 2)
+    {
+        OutError = TEXT("Dialogue script CSV must contain a header row and at least one data row.");
+        return false;
+    }
+
+    const TArray<FString>& Header = Rows[0];
+    const int32 LineIdColumn = FindColumn(Header, TEXT("LineID"));
+    const int32 TextColumn = FindColumn(Header, TEXT("Text"));
+    const int32 SpeakerTagColumn = FindColumnAny(Header, { TEXT("SpeakerTag"), TEXT("Speaker") });
+    const int32 EmotionTagColumn = FindColumn(Header, TEXT("EmotionTag"));
+    const int32 VoiceIdColumn = FindColumn(Header, TEXT("VoiceID"));
+    const int32 WaitTimeColumn = FindColumn(Header, TEXT("WaitTime"));
+    const int32 NextLineIdColumn = FindColumnAny(Header, { TEXT("NextLineID"), TEXT("NextLine"), TEXT("TargetLineID") });
+    const int32 ConditionColumn = FindColumnAny(Header, { TEXT("ConditionExpression"), TEXT("Condition") });
+    const int32 EventTagColumn = FindColumn(Header, TEXT("EventTag"));
+    const int32 EventPayloadColumn = FindColumnAny(Header, { TEXT("EventPayload"), TEXT("Payload") });
+    const int32 EventAsyncColumn = FindColumnAny(Header, { TEXT("bEventIsAsync"), TEXT("EventAsync"), TEXT("Async") });
+
+    if (LineIdColumn == INDEX_NONE || TextColumn == INDEX_NONE)
+    {
+        OutError = TEXT("Dialogue script CSV header must include LineID and Text.");
+        return false;
+    }
+
+    TArray<FChronicleDialogueScriptCsvRow> ImportedRows;
+    ImportedRows.Reserve(Rows.Num() - 1);
+    TSet<FName> ImportedLineIds;
+
+    for (int32 RowIndex = 1; RowIndex < Rows.Num(); ++RowIndex)
+    {
+        const TArray<FString>& Row = Rows[RowIndex];
+        const FString LineIdText = GetCsvCell(Row, LineIdColumn).TrimStartAndEnd();
+        if (LineIdText.IsEmpty())
+        {
+            OutError = FString::Printf(TEXT("Dialogue script CSV row %d has no LineID."), RowIndex + 1);
+            return false;
+        }
+
+        FChronicleDialogueScriptCsvRow ImportedRow;
+        ImportedRow.LineID = FName(*LineIdText);
+        if (ImportedLineIds.Contains(ImportedRow.LineID))
+        {
+            OutError = FString::Printf(TEXT("Duplicate LineID in dialogue script CSV: %s"), *ImportedRow.LineID.ToString());
+            return false;
+        }
+        ImportedLineIds.Add(ImportedRow.LineID);
+
+        ImportedRow.Text = FText::FromString(GetCsvCell(Row, TextColumn));
+        ImportedRow.SpeakerTag = SpeakerTagColumn != INDEX_NONE ? TagFromString(GetCsvCell(Row, SpeakerTagColumn)) : FGameplayTag();
+        ImportedRow.EmotionTag = EmotionTagColumn != INDEX_NONE ? TagFromString(GetCsvCell(Row, EmotionTagColumn)) : FGameplayTag();
+        ImportedRow.VoiceID = VoiceIdColumn != INDEX_NONE ? FName(*GetCsvCell(Row, VoiceIdColumn).TrimStartAndEnd()) : NAME_None;
+        if (WaitTimeColumn != INDEX_NONE && !GetCsvCell(Row, WaitTimeColumn).TrimStartAndEnd().IsEmpty())
+        {
+            ImportedRow.WaitTime = FCString::Atof(*GetCsvCell(Row, WaitTimeColumn));
+        }
+        ImportedRow.NextLineID = NextLineIdColumn != INDEX_NONE ? FName(*GetCsvCell(Row, NextLineIdColumn).TrimStartAndEnd()) : NAME_None;
+        ImportedRow.ConditionExpression = ConditionColumn != INDEX_NONE ? GetCsvCell(Row, ConditionColumn).TrimStartAndEnd() : FString();
+        ImportedRow.EventTag = EventTagColumn != INDEX_NONE ? TagFromString(GetCsvCell(Row, EventTagColumn)) : FGameplayTag();
+        if (EventTagColumn != INDEX_NONE && !GetCsvCell(Row, EventTagColumn).TrimStartAndEnd().IsEmpty() && !ImportedRow.EventTag.IsValid())
+        {
+            OutError = FString::Printf(TEXT("Invalid EventTag at CSV row %d: %s"), RowIndex + 1, *GetCsvCell(Row, EventTagColumn));
+            return false;
+        }
+        if (EventPayloadColumn != INDEX_NONE)
+        {
+            ParseEventPayloadCell(GetCsvCell(Row, EventPayloadColumn), ImportedRow.EventPayload);
+        }
+        ImportedRow.bEventIsAsync = EventAsyncColumn != INDEX_NONE && ParseBoolCell(GetCsvCell(Row, EventAsyncColumn));
+
+        ImportedRows.Add(ImportedRow);
+    }
+
+    if (ImportedRows.Num() == 0)
+    {
+        OutError = TEXT("Dialogue script CSV did not contain any importable rows.");
+        return false;
+    }
+
+    TMap<FName, FGuid> LineIdToNodeGuid;
+    if (!bReplaceExisting)
+    {
+        for (const FDialogueNode& Node : Tree->Nodes)
+        {
+            for (const FDialogueLine& Line : Node.Lines)
+            {
+                if (!Line.LineID.IsNone())
+                {
+                    LineIdToNodeGuid.FindOrAdd(Line.LineID, Node.NodeGuid);
+                }
+            }
+        }
+
+        for (const FName& ImportedLineID : ImportedLineIds)
+        {
+            if (LineIdToNodeGuid.Contains(ImportedLineID))
+            {
+                OutError = FString::Printf(TEXT("Imported LineID already exists in the target tree: %s"), *ImportedLineID.ToString());
+                return false;
+            }
+        }
+    }
+
+    for (const FChronicleDialogueScriptCsvRow& ImportedRow : ImportedRows)
+    {
+        if (ImportedRow.NextLineID.IsNone())
+        {
+            continue;
+        }
+
+        if (!ImportedLineIds.Contains(ImportedRow.NextLineID) && !LineIdToNodeGuid.Contains(ImportedRow.NextLineID))
+        {
+            OutError = FString::Printf(TEXT("NextLineID '%s' does not resolve to an imported or existing line."), *ImportedRow.NextLineID.ToString());
+            return false;
+        }
+    }
+
+    Tree->Modify();
+    if (bReplaceExisting)
+    {
+        Tree->Nodes.Reset();
+        Tree->Edges.Reset();
+        Tree->EditorStates.Reset();
+        Tree->RootNodeGuid.Invalidate();
+    }
+
+    if (!Tree->TreeGuid.IsValid())
+    {
+        Tree->TreeGuid = FGuid::NewGuid();
+    }
+
+    if (!Tree->RootNodeGuid.IsValid() || !Tree->FindNode(Tree->RootNodeGuid))
+    {
+        FDialogueNode RootNode;
+        RootNode.NodeGuid = FGuid::NewGuid();
+        RootNode.NodeType = EDialogueNodeType::Root;
+        Tree->RootNodeGuid = RootNode.NodeGuid;
+        Tree->Nodes.Add(RootNode);
+    }
+
+    for (FChronicleDialogueScriptCsvRow& ImportedRow : ImportedRows)
+    {
+        FDialogueNode SpeechNode;
+        SpeechNode.NodeGuid = FGuid::NewGuid();
+        SpeechNode.NodeType = EDialogueNodeType::Speech;
+
+        FDialogueLine Line;
+        Line.LineID = ImportedRow.LineID;
+        Line.Text = ImportedRow.Text;
+        Line.SpeakerTag = ImportedRow.SpeakerTag;
+        Line.EmotionTag = ImportedRow.EmotionTag;
+        Line.VoiceID = ImportedRow.VoiceID;
+        Line.WaitTime = ImportedRow.WaitTime;
+        SpeechNode.Lines.Add(Line);
+
+        ImportedRow.SpeechNodeGuid = SpeechNode.NodeGuid;
+        LineIdToNodeGuid.Add(ImportedRow.LineID, ImportedRow.SpeechNodeGuid);
+        Tree->Nodes.Add(SpeechNode);
+
+        if (ImportedRow.EventTag.IsValid())
+        {
+            FDialogueNode EventNode;
+            EventNode.NodeGuid = FGuid::NewGuid();
+            EventNode.NodeType = EDialogueNodeType::Event;
+            EventNode.EventTag = ImportedRow.EventTag;
+            EventNode.EventPayload = ImportedRow.EventPayload;
+            EventNode.bEventIsAsync = ImportedRow.bEventIsAsync;
+            ImportedRow.EventNodeGuid = EventNode.NodeGuid;
+            Tree->Nodes.Add(EventNode);
+        }
+    }
+
+    AddDialogueEdge(Tree, Tree->RootNodeGuid, ImportedRows[0].SpeechNodeGuid);
+
+    for (const FChronicleDialogueScriptCsvRow& ImportedRow : ImportedRows)
+    {
+        FGuid SourceGuid = ImportedRow.SpeechNodeGuid;
+        FString ConditionExpression = ImportedRow.ConditionExpression;
+
+        if (ImportedRow.EventNodeGuid.IsValid())
+        {
+            AddDialogueEdge(Tree, ImportedRow.SpeechNodeGuid, ImportedRow.EventNodeGuid, 0, ConditionExpression);
+            SourceGuid = ImportedRow.EventNodeGuid;
+            ConditionExpression.Reset();
+        }
+
+        if (ImportedRow.NextLineID.IsNone())
+        {
+            continue;
+        }
+
+        const FGuid* TargetGuid = LineIdToNodeGuid.Find(ImportedRow.NextLineID);
+        if (!TargetGuid || !TargetGuid->IsValid())
+        {
+            OutError = FString::Printf(TEXT("NextLineID '%s' does not resolve to an imported or existing line."), *ImportedRow.NextLineID.ToString());
+            return false;
+        }
+
+        AddDialogueEdge(Tree, SourceGuid, *TargetGuid, 0, ConditionExpression);
+    }
+
+    Tree->EnsureStableGuids();
+    Tree->MarkPackageDirty();
+    OutError.Reset();
+    return true;
+}
+
+bool UChronicleDialogueJsonLibrary::ImportDialogueScriptCsvFile(UDialogueTree* Tree, const FString& FilePath, bool bReplaceExisting, FString& OutError)
+{
+    FString Csv;
+    if (!FFileHelper::LoadFileToString(Csv, *FilePath))
+    {
+        OutError = FString::Printf(TEXT("Failed to load dialogue script CSV file: %s"), *FilePath);
+        return false;
+    }
+
+    return ImportDialogueScriptCsvString(Tree, Csv, bReplaceExisting, OutError);
 }
 
 bool UChronicleDialogueJsonLibrary::EnsureStableLineIds(UDialogueTree* Tree, int32& OutUpdatedCount, FString& OutError)
